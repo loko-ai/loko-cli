@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "tasks": {
+    "build": {
+      "upload": {
+        "repository": "livetech"
+      }
+    },
+    "docker-build": {
+      "company": "registry.livetech.site",
+      "build-args": {
+        "user": "piplivetech",
+        "password": "pip2018"
+      }
+    }
+  }
+}
