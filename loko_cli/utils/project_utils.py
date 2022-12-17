@@ -6,7 +6,7 @@ from pprint import pprint
 from loko_client.business.projects_client import Project
 
 from loko_cli.model import loko_classes
-from loko_cli.model.docker_service_model import DockerService
+from loko_cli.model.microservice_model import Microservice
 from loko_cli.model.loko_classes import Template, Edge, Node, Endpoint, Graph
 from loko_cli.utils.jsonutils import GenericJsonDecoder, GenericJsonEncoder
 
@@ -33,7 +33,7 @@ def get_side_containers(path):
     with config_path.open() as fproject:
         p = json.load(fproject)
         for k, v in p['side_containers'].items():
-            yield DockerService(name=f"{path.name}_{k}", **v)
+            yield Microservice(name=f"{path.name}_{k}", **v)
 
 
 def get_components_from_project(p: Project):
