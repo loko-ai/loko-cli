@@ -13,6 +13,7 @@ class Plan:
         self.local_extensions = []
         self.global_extensions = []
         self.side_containers = []
+        self.resources = []
 
     def add_service(self, service: Microservice):
         self.services.append(service)

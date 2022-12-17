@@ -14,11 +14,10 @@ GATEWAY_DS = Microservice(name="gw", image="lokoai/loko-gateway:0.0.4-dev", port
 ORCHESTRATOR_DS = Microservice(name="orchestrator", image="lokoai/loko-orchestrator:0.0.3-dev",
                                environment=dict(GATEWAY="http://gw:8080", EXTERNAL_GATEWAY="http://localhost:9999",
                                                 USER_UID=1000, USER_GID=129),
-                               volumes=["/var/run/docker.sock:/var/run/docker.sock",
-                                        f"{os.path.expanduser('~')}/loko:/home/loko/loko:rw"],
+                               volumes=["/var/run/docker.sock:/var/run/docker.sock"],
                                volumes_from=["orchestrator_volume"])
 
-DORCHESTRATOR_DC = Microservice(name="orchestrator_volume", image="project_data",
+ORCHESTRATOR_DC = Microservice(name="orchestrator_volume", image="project_data",
                                 hostconfig=dict(Binds=["/root/loko/"]))
 
 TEMPORARY_MAPPING = dict(predictor=Microservice(name="predictor", image="lokoai/ds4biz-predictor-dm:0.0.3-dev",

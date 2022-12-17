@@ -1,7 +1,7 @@
 import asyncio
 from pathlib import Path
 
-from loko_cli.config.app_init import GATEWAY_DS, ORCHESTRATOR_DS, TEMPORARY_MAPPING, YAML
+from loko_cli.config.app_init import GATEWAY_DS, ORCHESTRATOR_DS, TEMPORARY_MAPPING, YAML, ORCHESTRATOR_DC
 from loko_cli.model.microservice_model import Microservice
 from loko_cli.model.plan_model import Plan
 from loko_cli.utils.project_utils import get_components_from_project, get_side_containers, get_loko_project, \
@@ -55,9 +55,12 @@ async def plan(project_path, engine=None):
         project_path = Path(project_path)
 
     ## INIT PROJECT PLAN
-    pp = Plan(project_path.name, [GATEWAY_DS, ORCHESTRATOR_DS])
+    pp = Plan(project_path.name, [GATEWAY_DS, ORCHESTRATOR_DS, ORCHESTRATOR_DC])
 
     lp = get_loko_project(project_path)
+
+    if HAS_RESOURCES:
+        pp.resources = list(get_required_resources_from_project(lp))
 
     if HAS_EXTENSIONS:
         pimage = lp.id
