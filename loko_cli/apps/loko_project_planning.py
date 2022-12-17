@@ -10,6 +10,7 @@ from loko_cli.utils.project_utils import get_components_from_project, get_side_c
 
 def plan2dc(pp: Plan, pp_path=None):
     dc_ms = {}
+
     for ms in pp.services:
         if isinstance(ms, Microservice):
             ms.environment = [f"{k}={str(v)}" for k, v in ms.environment.items()]
@@ -17,7 +18,7 @@ def plan2dc(pp: Plan, pp_path=None):
         else:
             print(ms)
             extension = Microservice(name=ms["name"], image=ms["image"])
-        dc_ms.update(extension.__dict__())
+        dc_ms.update(extension.__dict__)
 
     d = dict(version="3.3", services=dc_ms)
 
@@ -89,4 +90,4 @@ async def plan(project_path, engine=None):
 
 
 if __name__ == '__main__':
-    asyncio.run(plan("/home/alejandro/loko/projects/tesseract_base_api"))
+    asyncio.run(plan("/home/alejandro/loko/projects/tesseract_base_api", engine="docker"))
