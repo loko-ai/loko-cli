@@ -44,7 +44,7 @@ class LokoDockerClient:
                 logging.exception(inst)
 
     async def close(self):
-        await self.client.session.close()
+        # await self.client.session.close()
         await self.client.close()
 
     async def exists(self, id):
@@ -106,7 +106,7 @@ class LokoDockerClient:
             if log_collector and final_name:
                 await log_collector(dict(type="log", name=final_name, msg=json.dumps(line)))
 
-    async def build(self, path, log_collector: LogCollector = None):
+    async def build(self, path, image=None, log_collector: LogCollector = None):
         client = self.client
         # client.session = aiohttp.ClientSession(connector=client.connector, timeout=200 * 1000)
 
@@ -125,7 +125,7 @@ class LokoDockerClient:
 
         async for line in client.images.build(fileobj=context,
                                               encoding="gzip",
-                                              tag=f"{path.name}",
+                                              tag=f"{image or path.name}",
                                               buildargs=dict(GATEWAY=GATEWAY), stream=True):
             if "stream" in line:
                 msg = line['stream'].strip()

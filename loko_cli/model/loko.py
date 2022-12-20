@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
+from pathlib import Path
 from pprint import pprint
-
 
 LATEST_PRJ_VERSION = "1.0.0"
 
@@ -83,10 +83,10 @@ class Comment:
 class Template:
 
     def __init__(self, id, description="", created_on=None, last_modify=None, graph=None):
+        self.id = id
         self.description = description
         self.created_on = created_on or datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         self.last_modify = last_modify or datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-        self.id = id
         self.graph = graph or dict(main=Graph(nodes=[], edges=[]))
 
     def info(self):
@@ -94,10 +94,16 @@ class Template:
 
 
 class Project:
-    def __init__(self, name, description="", created_on=None, last_modify=None, graphs=None, open=None, active=None, id = None,
+    def __init__(self, name, path: Path = None, description="", created_on=None, last_modify=None, graphs=None,
+                 open=None,
+                 active=None,
+                 id=None,
+                 resources=None,
+                 global_extensions=None,
                  **kwargs):
-        self.name = name
         self.id = id or str(uuid.uuid4())
+        self.path = path,
+        self.name = name
         self.description = description
         self.created_on = created_on or datetime.now().strftime("%d/%m/%Y, %H:%M:%S")
         self.last_modify = last_modify or datetime.now().strftime("%d/%m/%Y, %H:%M:%S")
@@ -105,6 +111,8 @@ class Project:
         self.open = open or ["main"]
         self.active = active or "main"
         self.version = LATEST_PRJ_VERSION
+        self.resources = resources or []
+        self.global_extensions = global_extensions or []
 
     def nodes(self):
         for id, g in self.graphs.items():
@@ -121,6 +129,26 @@ class Project:
         return dict(name=self.name, id=self.id, description=self.description, created_on=self.created_on,
                     last_modify=self.last_modify)
 
+    def get_required_resources(self):
+        for k, g in self.graphs.items():
+            for node in g.nodes:
+                if "Inputs" == node.data['options'].get("group"):
+                    yield node.data['options'].get("values").get("value").get("path")
+
+    def get_global_components(self):
+        for k, g in self.graphs.items():
+            for node in g.nodes:
+                if "pname" in node.data:
+                    yield node.data["pname"]
+
+    def get_core_components(self):
+        for k, g in self.graphs.items():
+            for node in g.nodes:
+                if "microservice" in node.data:
+                    yield node.data["microservice"]
+
+    def is_container(self):
+        return (self.path / "Dockerfile").exists()
 
 
 if __name__ == '__main__':

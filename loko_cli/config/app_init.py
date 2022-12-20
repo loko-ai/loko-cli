@@ -2,7 +2,7 @@ import os
 
 import ruamel.yaml
 
-from loko_cli.model.microservice_model import Microservice
+from loko_cli.model.microservices import Microservice
 
 YAML = ruamel.yaml.YAML()
 YAML.preserve_quotes = True

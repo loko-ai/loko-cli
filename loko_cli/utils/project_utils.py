@@ -3,14 +3,13 @@ import json
 import os.path
 from pathlib import Path
 from pprint import pprint
-from loko_client.business.projects_client import Project
 
-from loko_cli.model import loko_classes
-from loko_cli.model.microservice_model import Microservice
-from loko_cli.model.loko_classes import Template, Edge, Node, Endpoint, Graph
+from loko_cli.model import loko
+from loko_cli.model.microservices import Microservice
+from loko_cli.model.loko import Template, Edge, Node, Endpoint, Graph,Project
 from loko_cli.utils.jsonutils import GenericJsonDecoder, GenericJsonEncoder
 
-dec = GenericJsonDecoder([loko_classes.Project, Template, Edge, Node, Endpoint, Graph], )
+dec = GenericJsonDecoder([Project, Template, Edge, Node, Endpoint, Graph], )
 
 
 def get_loko_project(path):

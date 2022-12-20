@@ -6,3 +6,4 @@ venv
 dist
 __pycache__
 dist
+**/*.pem

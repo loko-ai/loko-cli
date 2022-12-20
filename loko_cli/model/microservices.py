@@ -3,7 +3,8 @@ import logging
 
 class Microservice:
 
-    def __init__(self, name, image, repository=None, ports=None, environment=None, networks=None, volumes=None, volumes_from=None,
+    def __init__(self, name, image, repository=None, ports=None, environment=None, networks=None, volumes=None,
+                 volumes_from=None,
                  expose=None, **kwargs):
         self.name = name
         self.image = image
@@ -13,7 +14,7 @@ class Microservice:
         self.networks = networks or []
         self.volumes = volumes or []
         self.expose = expose or []
-        self.volumes_from = volumes_from or [] ##TODO RIDEFINIRE PARAMETRO SLEGATO DA I VARI ENGINE
+        self.volumes_from = volumes_from or []  ##TODO RIDEFINIRE PARAMETRO SLEGATO DA I VARI ENGINE
         if kwargs:
             logging.warning((self.__class__, "KWARGS", kwargs))
 
@@ -26,3 +27,6 @@ class Microservice:
     def get_body(self):
         return dict(image=self.image, ports=self.ports, environment=self.environment, networks=self.networks,
                     volumes=self.volumes)
+
+    def __str__(self):
+        return str(self.get_body())

@@ -2,8 +2,8 @@ import asyncio
 from pathlib import Path
 
 from loko_cli.config.app_init import GATEWAY_DS, ORCHESTRATOR_DS, TEMPORARY_MAPPING, YAML, ORCHESTRATOR_DC
-from loko_cli.model.microservice_model import Microservice
-from loko_cli.model.plan_model import Plan
+from loko_cli.model.microservices import Microservice
+from loko_cli.model.plan import Plan
 from loko_cli.utils.project_utils import get_components_from_project, get_side_containers, get_loko_project, \
     get_required_resources_from_project
 
@@ -50,7 +50,7 @@ async def plan(project_path, engine=None):
     HAS_EXTENSIONS = (project_path / "Dockerfile").exists()
     HAS_GLOBAL_EXTENSIONS = bool(required_global_extensions)
 
-    RULES = []
+    #RULES = []
 
     if not isinstance(project_path, Path):
         project_path = Path(project_path)

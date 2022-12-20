@@ -1,51 +1,69 @@
 # crea wstruttura
 # plan(loko_project)
+import asyncio
+import pprint
 import shutil
 from pathlib import Path
 
-from loko_tools.config.app_init import GATEWAY_DS, ORCHESTRATOR_DS, TEMPORARY_MAPPING, YAML
-from loko_tools.model.docker_service_model import DockerService
-from loko_tools.model.plan_model import DockerComposePlan
-from loko_tools.utils.project_utils import get_loko_project, get_side_containers, get_components_from_project
-
-
-class Planner:
-    def __init__(self):
-        pass
-
-    def plan(self, loko_project: Path):
-        pass
-
-
-class DestPlanner(Planner):
-    def __init__(self, output_dir: Path = None, version="0.1"):
-        super().__init__()
-        self.output_dir = Path(output_dir or f"dist/docker_compose/{version}")
-        self.output_dir.mkdir(exist_ok=True, parents=True)
-        self.version = version
-
-    def clean(self):
-        shutil.rmtree(self.output_dir)
+from loko_cli.business.deployment.planners.planners import DestPlanner
+from loko_cli.business.docker.dockermanager import LokoDockerClient
+from loko_cli.config.app_init import YAML, GATEWAY_DS, ORCHESTRATOR_DS, ORCHESTRATOR_DC, TEMPORARY_MAPPING
+from loko_cli.dao.loko import FSLokoProjectDAO
+from loko_cli.model.loko import Project
+from loko_cli.model.plan import Plan
 
 
 class DCPlanner(DestPlanner):
-    def __init__(self, project_company, output_dir: Path = None, version="0.1"):
+    def __init__(self, output_dir: Path = None, version="0.1"):
         super().__init__(output_dir, version)
-        self.project_company = project_company
         self.dc = None
 
-    def plan(self, loko_project: Path) -> DockerComposePlan:
+    def plan(self, project: Project):
 
-        dcplan = DockerComposePlan()
-        dcplan.add_service(GATEWAY_DS)
-        dcplan.add_service(ORCHESTRATOR_DS)
-        dcplan.add_service(DockerService(name=loko_project.name, image=f"{self.project_company}/{loko_project.name}"))
+        # required_global_extensions = list(get_components_from_project(loko_prj))
+        # required_resources = get_required_resources_from_project(loko_prj)
+        # HAS_RESOURCES = bool(required_resources)
+        # HAS_EXTENSIONS = (project_path / "Dockerfile").exists()
+        # HAS_GLOBAL_EXTENSIONS = bool(required_global_extensions)
 
-        # for ds in self.services_from_project(loko_project):
-        #    dcplan.add_service(ds)
+        # RULES = []
 
-        # self.dc = dcplan
-        return dcplan
+        ## INIT PROJECT PLAN
+        plan = Plan(path=project.path, namespace=project.name, orchestrator=ORCHESTRATOR_DS, gateway=GATEWAY_DS)
+
+        plan.resources = list(project.get_required_resources())
+
+        if project.is_container():
+            plan.add_local_extension(dict(name=project.id, image=project.name))
+
+        for el in project.get_core_components():
+            if el in TEMPORARY_MAPPING:
+                plan.add_service(TEMPORARY_MAPPING[el])
+
+        available_global_extensions = {}
+        for f in (project.path.parent.parent / "shared" / "extensions").glob("**/components.json"):
+            global_ext_path = f.parent.parent
+            pname = global_ext_path.name
+            available_global_extensions[pname] = f
+
+        for global_extension in project.get_global_components():
+            print(global_extension)
+
+        """if HAS_GLOBAL_EXTENSIONS:
+                global_ext_path = f.parent.parent
+                pname = global_ext_path.name
+                if pname in required_global_extensions:
+                    pp.add_global_extensio(Microservice(name=pname, image=pname))
+                    for ms in get_side_containers(global_ext_path):
+                        pp.add_side_container(ms)"""
+
+        ## SAVE JSON PLAN
+        # pp.save(project_path)
+
+        ## IF ENGINE GENERATE ENGINE SPECIFIC TEMPLATE
+        # if engine:
+        #    ENGINE_PLAN_MAPPING[engine](pp, project_path)
+        return plan
 
     def save(self):
         dest = self.output_dir / "docker-compose.yml"
@@ -57,7 +75,7 @@ class DCPlanner(DestPlanner):
         else:
             raise Exception("Can't save empty plan, try to make one first")
 
-    def services_from_project(self, loko_project_path: Path):
+    """def services_from_project(self, loko_project_path: Path):
 
         lp = get_loko_project(loko_project_path)
 
@@ -75,7 +93,7 @@ class DCPlanner(DestPlanner):
                 extension = v
             else:
                 extension = DockerService(name=k, image=v)
-            yield extension
+            yield extension"""
 
 
 class AWSPlanner(DestPlanner):
@@ -90,22 +108,35 @@ class AWSPlanner(DestPlanner):
 
 if __name__ == "__main__":
     # d = dict(version="3.3", networks=dict(loko=dict(driver="bridge")), services=services)
+    from loko_cli.business.deployment.appliers.docker_compose_applier import DockerComposeApplier
 
-    p = Path("/home/alejandro/loko/projects/hello_ale")
-    # DCPlanner(version="0.2").plan(p)
-    # AWSPlanner().plan(p)
-    # Generazione piano
-    planner = DCPlanner(project_company="lokairepo")
-    plan = planner.plan(p)
-    print(plan)
-    planner.save()
-    # o="/dsdfs/ddd"
-    # plan.save(o)
 
-    # plan + apply senza salvare
-    # DockerComposeApplier.apply(DCPlanner(p))
+    async def main():
+        p = Path("/home/fulvio/loko/projects/hello")
+        dao = FSLokoProjectDAO()
+        project = dao.get(p)
+        # DCPlanner(version="0.2").plan(p)
+        # AWSPlanner().plan(p)
+        # Generazione piano
+        planner = DCPlanner()
+        print(project.path)
+        plan = planner.plan(project)
+        client = LokoDockerClient()
+        applier = DockerComposeApplier(project_company="livetechprove", client=client)
 
-    # plan+apply passando per disco
-    # plan = DCPlanner(p)
-    # plan.save(o)
-    # DockerComposeApplier().apply(o)
+        # planner.save()
+        # o="/dsdfs/ddd"
+        # plan.save(o)
+
+        # plan + apply senza salvare
+        # DockerComposeApplier.apply(DCPlanner(p))
+
+        # plan+apply passando per disco
+        # plan = DCPlanner(p)
+        # plan.save(o)
+        # DockerComposeApplier().apply(o)
+        await applier.apply(plan)
+        await client.close()
+
+
+    asyncio.run(main())

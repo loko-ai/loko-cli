@@ -2,26 +2,27 @@ import json
 from pathlib import Path
 from typing import List
 
-from loko_cli.model.microservice_model import Microservice
+from loko_cli.model.microservices import Microservice
 
 
 class Plan:
 
-    def __init__(self, namespace, services: List[Microservice] = None):
+    def __init__(self, path: Path, namespace, orchestrator: Microservice, gateway: Microservice,
+                 core: List[Microservice] = None):
+        self.path = path
         self.namespace = namespace
-        self.services = services or []
+        self.gateway = gateway
+        self.orchestrator = orchestrator
+        self.core = core or []
         self.local_extensions = []
         self.global_extensions = []
         self.side_containers = []
         self.resources = []
 
-    def add_service(self, service: Microservice):
-        self.services.append(service)
-
     def add_local_extension(self, service: Microservice):
         self.local_extensions.append(service)
 
-    def add_global_extensio(self, service: Microservice):
+    def add_global_extension(self, service: Microservice):
         self.global_extensions.append(service)
 
     def add_side_container(self, service: Microservice):
@@ -51,6 +52,7 @@ class Plan:
         d = self.__dict__
         with open(path / "plan.json", "w") as f:
             json.dump(d, f, indent=2)
+
 
 # def plan_from_dc(path: Path):
 #     with path.open("rb") as f:
