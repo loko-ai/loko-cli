@@ -1,11 +1,14 @@
-import setuptools,os
+import setuptools, os
+
 
 def get_requirements():
     return [x for x in open("./requirements.txt").read().split("\n") if not x.startswith("pkg_resources")]
 
+
 import json
-ppom=json.load(open("./ppom.json"))
-version=ppom['version']
+
+ppom = json.load(open("./ppom.json"))
+version = ppom['version']
 
 setuptools.setup(
     name="loko-cli",
@@ -22,6 +25,9 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    entry_points={
+        'console_scripts': ['loko=loko_cli.apps.cl:loko'],
+    },
     install_requires=get_requirements()
 
 )
