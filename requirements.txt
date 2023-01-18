@@ -7,3 +7,4 @@ loguru
 loko-client
 paramiko
 ruamel.yaml
+tenacity
