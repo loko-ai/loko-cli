@@ -1,0 +1,9 @@
+variables:
+  CACHE: "enabled"
+#  DOCKER: "enabled"
+  PYTHON: "enabled"
+
+include:
+  - project: ci-cd/default-ci-configuration
+    ref: master
+    file: '.gitlab-ci.yml'
