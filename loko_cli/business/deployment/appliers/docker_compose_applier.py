@@ -4,6 +4,7 @@ from io import StringIO
 from pathlib import Path
 from tempfile import mkdtemp
 
+from docker import DockerClient
 from docker.utils import tar
 
 from loko_cli.business.docker.dockermanager import LokoDockerClient
@@ -19,6 +20,7 @@ class DockerComposeApplier(Applier):
         self.build = build
         self.client = client
         self.project_company = project_company
+        self.docker = DockerClient.from_env()
 
         self.registry = registry or "local"
 
@@ -50,10 +52,14 @@ class DockerComposeApplier(Applier):
             print(g)
 
         await self._build_data_image(plan, DATA_IMAGE)
-        await self._create_data(DATA_NAME, image=DATA_IMAGE)
-        await self._run_gateway(plan, GW, RULES)
 
-        await self._run_orchestrator(plan, name=ORCH, gateway=GW, data=DATA_NAME)
+        if self.push:
+            self._push(plan)
+
+        # await self._create_data(DATA_NAME, image=DATA_IMAGE)
+        # await self._run_gateway(plan, GW, RULES)
+
+        # await self._run_orchestrator(plan, name=ORCH, gateway=GW, data=DATA_NAME)
 
     async def _build_data_image(self, plan: Plan, image_name):
         # MANUAL TEMP DIR INSTEAD OF TEMPDIR CONTEXT MANAGER
@@ -119,6 +125,12 @@ class DockerComposeApplier(Applier):
             if not "lokoai" in el.image:
                 # print(el.__dict__())
                 await self.client.build("/home/alejandro/loko/projects/hello_ale")
+
+    def _push(self, plan):
+        DATA_NAME = f"{plan.namespace}_data"
+        DATA_IMAGE = f"{self.project_company}/{DATA_NAME}"
+        for line in self.docker.images.push(DATA_IMAGE, stream=True):
+            print(line)
 
 
 if __name__ == "__main__":

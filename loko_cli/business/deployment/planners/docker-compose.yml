@@ -1,0 +1,30 @@
+version: '3.3'
+volumes:
+  assets:
+services:
+  orchestrator:
+    image: lokoai/loko-orchestrator:0.0.3-dev
+    environment:
+      GATEWAY: http://gateway:8080
+      EXTERNAL_GATEWAY: http://localhost:9999
+    volumes:
+      - assets:/root/loko
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    command: "python services.py"
+  gateway:
+    image: lokoai/loko-gateway:0.0.4-dev
+    ports:
+      - 19999:8080
+    environment:
+      RULES: '[{"name": "orchestrator", "host": "orchestrator", "port": 8888,"type":
+        "orchestrator","scan":True},{"name": "predictor", "host": "predictor", "port":
+        8080,"type": "custom","scan":False},{"name": "hello", "host": "hello", "port":
+        8080,"type": "custom"}]'
+  hello:
+    image: livetechprove/hello
+
+  hello_data:
+    image: livetechprove/hello_data
+    volumes:
+      - assets:/root/loko

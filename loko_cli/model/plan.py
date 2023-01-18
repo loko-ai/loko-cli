@@ -8,16 +8,17 @@ from loko_cli.model.microservices import Microservice
 class Plan:
 
     def __init__(self, path: Path, namespace, orchestrator: Microservice, gateway: Microservice,
-                 core: List[Microservice] = None):
+                 core: List[Microservice] = None, local_extensions=None, global_extensions=None, side_containers=None,
+                 resources=None):
         self.path = path
         self.namespace = namespace
         self.gateway = gateway
         self.orchestrator = orchestrator
         self.core = core or []
-        self.local_extensions = []
-        self.global_extensions = []
-        self.side_containers = []
-        self.resources = []
+        self.local_extensions = local_extensions or []
+        self.global_extensions = global_extensions or []
+        self.side_containers = side_containers or []
+        self.resources = resources or []
 
     def add_local_extension(self, service: Microservice):
         self.local_extensions.append(service)

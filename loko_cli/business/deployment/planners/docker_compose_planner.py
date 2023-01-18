@@ -1,6 +1,8 @@
 # crea wstruttura
 # plan(loko_project)
 import asyncio
+import dataclasses
+import json
 import pprint
 import shutil
 from pathlib import Path
@@ -11,6 +13,7 @@ from loko_cli.config.app_init import YAML, GATEWAY_DS, ORCHESTRATOR_DS, ORCHESTR
 from loko_cli.dao.loko import FSLokoProjectDAO
 from loko_cli.model.loko import Project
 from loko_cli.model.plan import Plan
+from loko_cli.utils.jsonutils import GenericJsonEncoder
 
 
 class DCPlanner(DestPlanner):
@@ -96,16 +99,6 @@ class DCPlanner(DestPlanner):
             yield extension"""
 
 
-class AWSPlanner(DestPlanner):
-    def __init__(self):
-        super().__init__(Path("../dist/aws"))
-
-    def plan(self, loko_project: Path):
-        for i in range(5):
-            dest = self.output_dir / f"Conf{i}.yml"
-            dest.touch()
-
-
 if __name__ == "__main__":
     # d = dict(version="3.3", networks=dict(loko=dict(driver="bridge")), services=services)
     from loko_cli.business.deployment.appliers.docker_compose_applier import DockerComposeApplier
@@ -135,6 +128,9 @@ if __name__ == "__main__":
         # plan = DCPlanner(p)
         # plan.save(o)
         # DockerComposeApplier().apply(o)
+        enc = GenericJsonEncoder(include_class=True)
+        with open("plan.json", "w") as o:
+            json.dump(plan, o, default=enc.default, indent=4)
         await applier.apply(plan)
         await client.close()
 

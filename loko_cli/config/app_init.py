@@ -8,7 +8,7 @@ YAML = ruamel.yaml.YAML()
 YAML.preserve_quotes = True
 YAML.indent(sequence=3, offset=2)
 
-GATEWAY_DS = Microservice(name="gw", image="lokoai/loko-gateway:0.0.4-dev", ports={"8080": "19999"},
+GATEWAY_DS = Microservice(name="gw", image="lokoai/loko-gateway:0.0.4-dev", ports={8080: 19999},
                           environment=dict(AUTOSCAN=False,
                                            RULES='[{"name": "orchestrator", "host": "orchestrator", "port": 8888,"type": "orchestrator","scan":True},{"name": "predictor", "host": "predictor", "port": 8080,"type": "custom","scan":False}]'))
 ORCHESTRATOR_DS = Microservice(name="orchestrator", image="lokoai/loko-orchestrator:0.0.3-dev",
@@ -18,7 +18,7 @@ ORCHESTRATOR_DS = Microservice(name="orchestrator", image="lokoai/loko-orchestra
                                volumes_from=["orchestrator_volume"])
 
 ORCHESTRATOR_DC = Microservice(name="orchestrator_volume", image="project_data",
-                                hostconfig=dict(Binds=["/root/loko/"]))
+                               hostconfig=dict(Binds=["/root/loko/"]))
 
 TEMPORARY_MAPPING = dict(predictor=Microservice(name="predictor", image="lokoai/ds4biz-predictor-dm:0.0.3-dev",
                                                 volumes=[

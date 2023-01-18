@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from io import StringIO
 from pathlib import Path
 
 import aiodocker
@@ -106,7 +107,7 @@ class LokoDockerClient:
             if log_collector and final_name:
                 await log_collector(dict(type="log", name=final_name, msg=json.dumps(line)))
 
-    async def build(self, path, image=None, log_collector: LogCollector = None):
+    async def build(self, path, image=None, dockerfile: StringIO = None, log_collector: LogCollector = None):
         client = self.client
         # client.session = aiohttp.ClientSession(connector=client.connector, timeout=200 * 1000)
 
@@ -114,9 +115,14 @@ class LokoDockerClient:
         print("Tarring the file")
         exclude = self.prepare_docker_ignore(path)
         print("Excludes", exclude)
-        context = tar(
-            path, exclude=exclude, dockerfile=process_dockerfile("Dockerfile", path), gzip=True
-        )
+        if dockerfile:
+            context = tar(
+                path, exclude=exclude, dockerfile=("Dockerfile", dockerfile.getvalue()), gzip=True
+            )
+        else:
+            context = tar(
+                path, exclude=exclude, dockerfile=process_dockerfile("Dockerfile", path), gzip=True
+            )
         # bname = f"{path.name}:builder"
         # self.collector.logs[bname] = []
         # await self.collector.emit_now(bname, f"Building {path.name} image...")

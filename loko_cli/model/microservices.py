@@ -25,8 +25,10 @@ class Microservice:
     #     return d
 
     def get_body(self):
-        return dict(image=self.image, ports=self.ports, environment=self.environment, networks=self.networks,
+        temp = dict(image=self.image, ports=self.ports, environment=self.environment, networks=self.networks,
                     volumes=self.volumes)
+
+        return {k: v for (k, v) in temp.items() if v}
 
     def __str__(self):
         return str(self.get_body())
