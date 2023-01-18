@@ -1,9 +1,9 @@
-ruamel.yaml
 aiodocker
-docker
-loko-client
 boto3
-kubernetes
 click
-paramiko
+docker
+kubernetes
 loguru
+loko-client
+paramiko
+ruamel.yaml
