@@ -15,8 +15,6 @@ class Microservice:
         self.volumes = volumes or []
         self.expose = expose or []
         self.volumes_from = volumes_from or []  ##TODO RIDEFINIRE PARAMETRO SLEGATO DA I VARI ENGINE
-        if kwargs:
-            logging.warning((self.__class__, "KWARGS", kwargs))
 
     # def __dict__(self):
     #     d = dict()

@@ -22,7 +22,6 @@ class FSLokoProjectDAO(LokoProjectDAO):
 
         with open(project_path) as f:
             o = json.loads(f.read(), object_hook=dec.object_hook)
-            print(o)
             o.path = path
             return o
             # j = json.dumps(o, default=GenericJsonEncoder().default)

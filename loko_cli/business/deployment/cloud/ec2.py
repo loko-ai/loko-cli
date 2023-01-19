@@ -85,7 +85,13 @@ class EC2Manager:
                     username=username, pkey=privkey)
         for cmd in cmds:
             stdin, stdout, stderr = ssh.exec_command(cmd)
-            yield stdout.read().decode(), stderr.read().decode()
+            line = None
+            while True:
+                line = stderr.readline()
+                if not line:
+                    break
+
+                yield line
             del stdin, stdout, stderr
         ssh.close()
 

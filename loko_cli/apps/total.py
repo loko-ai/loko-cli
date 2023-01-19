@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 
 import docker
 from docker.utils import tar
+from loguru import logger
 from tenacity import retry
 
 from loko_cli.business.deployment.cloud.ec2 import EC2Manager
@@ -50,8 +51,8 @@ class PlanDAO:
 base = Path.home() / "loko"
 
 
-async def aprint(*args):
-    print(*args)
+async def aprint(arg):
+    logger.debug(arg['msg'])
 
 
 async def plan(p: Path, company: str, gateway_port=8080, push=True):
@@ -66,8 +67,10 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
     if has_local:
         # Build a local extension
         MAIN_IMAGE = f"{company}/{project.path.name}"
+        logger.info(f"Building {MAIN_IMAGE}")
         resp = await client.build(project.path, image=MAIN_IMAGE)
-        print(resp)
+        if resp:
+            logger.info("Build successful")
 
     RULES = [
         {"name": "orchestrator", "host": "orchestrator", "port": 8888, "type": "orchestrator", "scan": True}]
@@ -78,7 +81,6 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
 
     ges = list(project.get_global_components())
     with set_directory(p):
-        print("CWD", p, os.getcwd())
         with TemporaryDirectory(dir=".") as d:
             d = Path(d)
             if ges:
@@ -89,7 +91,6 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
                     dest.parent.mkdir(exist_ok=True, parents=True)
                     shutil.copyfile(ge, dest)
                     root = ge.parent.parent
-                    print(root)
                     config_path = root / "config.json"
                     if config_path.exists():
                         with config_path.open() as cf:
@@ -99,12 +100,18 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
                                 services[f"{root.name}_{k}"] = dict(image=v['image'])
 
                     GE_IMAGE_NAME = f"{company}/{root.name}"
-                    print(GE_IMAGE_NAME)
-                    print("Building ge", GE_IMAGE_NAME)
+                    logger.info(f"Building global extension: {GE_IMAGE_NAME}")
                     resp = await client.build(root, GE_IMAGE_NAME)
+                    if resp:
+                        logger.info("Build successful")
                     if push:
+                        logger.info(f"Pushing {GE_IMAGE_NAME}")
                         for line in client2.images.push(GE_IMAGE_NAME, stream=True):
-                            print(line)
+                            msg = json.loads(line.decode())
+                            if "error" in msg:
+                                logger.error(msg)
+                                exit(1)
+                            logger.debug(msg)
 
             # Build orchestrator
             ORCH_IMAGE = f"{company}/{name}_orchestrator"
@@ -124,19 +131,32 @@ CMD python services.py""")
 
             df.seek(0)
 
-            print("Building", ORCH_IMAGE)
-            print(df.getvalue())
-            print(df.getvalue())
+            logger.info(f"Building orchestrator: {ORCH_IMAGE}")
             resp = await client.build(project.path, dockerfile=df, image=ORCH_IMAGE, log_collector=aprint)
-            print(resp)
-            # Pushing images if needed
+            if resp:
+                logger.info("Build successful")
 
             if push:
                 if has_local:
+                    logger.info(f"Pushing {MAIN_IMAGE}")
+
                     for line in client2.images.push(MAIN_IMAGE, stream=True):
-                        print(line)
+                        msg = json.loads(line.decode())
+                        if "error" in msg:
+                            logger.error(msg)
+                            exit(1)
+                        logger.debug(msg)
+                    logger.info(f"Pushed")
+
+                logger.info(f"Pushing {ORCH_IMAGE}")
+
                 for line in client2.images.push(ORCH_IMAGE, stream=True):
-                    print(line)
+                    msg = json.loads(line.decode())
+                    if "error" in msg:
+                        logger.error(msg)
+                        exit(1)
+                    logger.debug(msg)
+                logger.info(f"Pushed")
 
             # Generate docker-compose
 
@@ -156,41 +176,45 @@ CMD python services.py""")
 
             dc = dict(version="3.3", services=services)
 
-            print(dc)
+            logger.info("Creating docker-compose")
+
             with open("docker-compose.yml", "w") as o:
-                print(YAML.dump(dc, o))
+                YAML.dump(dc, o)
+            logger.info("Done!")
 
     await client.close()
 
 
-async def init(p: Path, instance_name, instance_type="t2.micro"):
+async def init_ec2(p: Path, instance_name, instance_type="t2.micro"):
     ec2 = EC2Manager()
     img = "ami-0a691527202ea8b3d"
     dao = PlanDAO(p)
     plan = dao.get()
     instance_id = plan.get("instance")
+    logger.info("Creating ec2 instance")
+    if instance_id:
+        try:
+            inst = ec2.get(instance_id)
+            state = inst.state['Name']
+            if state != "running":
+                logger.error(f"EC2 instance {instance_id} is in state {state}")
+                exit(1)
+        except Exception as e:
+            logger.error(e)
+            exit(1)
+
     if not instance_id:
         ii = ec2.create(instance_name, img, instance_type)
         plan['instance'] = ii.id
         dao.save(plan)
     instance_id = plan['instance']
+    logger.info("Waiting for instance running state...")
     ec2.wait_for(instance_id, "running")
+
+    logger.info(f"Instance {instance_id} is running")
     inst = ec2.get(instance_id)
-
-    # print(ii, ii[0].state)
-
-    await asyncio.sleep(5)
-
-    @retry
-    def ii():
-        for el in ec2.commands(["curl -fsSL https://get.docker.com -o get-docker.sh", "sudo sh get-docker.sh",
-                                "sudo usermod -aG docker ubuntu",
-                                'sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose',
-                                'sudo chmod +x /usr/local/bin/docker-compose'],
-                               inst.public_dns_name):
-            print(el)
-
-    # ii()
+    logger.info(f"Public DNS name: {inst.public_dns_name}")
+    logger.info(f"Public IP Address: {inst.public_ip_address}")
 
 
 async def deploy(p: Path):
@@ -201,11 +225,50 @@ async def deploy(p: Path):
     inst = ec2.get(instance_id)
     # img = "ami-06ce824c157700cd2"
     # ec2.create("accenture", img)
+    logger.info(f"Deploying to {instance_id}...")
+    if inst.state['Name'] != "running":
+        logger.error(f"Can't deploy. Instance {instance_id} is in state {inst.state['Name']}")
+        exit(1)
 
     ec2.copy([p / "docker-compose.yml"],
              inst.public_dns_name)
-    for el in ec2.commands(["docker-compose pull", "docker-compose up -d"], inst.public_dns_name):
-        print(el)
+    for el in ec2.commands(["docker-compose down", "docker-compose pull", "docker-compose up -d"],
+                           inst.public_dns_name):
+        logger.info(el.strip())
+    logger.info("Done!")
+
+
+def info():
+    dao = PlanDAO(Path(os.getcwd()))
+    plan = dao.get()
+    instance_id = plan.get("instance")
+    logger.info(f"Instance id: {instance_id}")
+    dao = FSLokoProjectDAO()
+    ec2 = EC2Manager()
+    dns = None
+    if instance_id:
+        try:
+            ec2inst = ec2.get(instance_id)
+        except Exception as e:
+            logger.error(e)
+            exit(1)
+        logger.info(f"Instance {instance_id} status: {ec2inst.state['Name']}")
+        logger.info(f"Public DNS name: {ec2inst.public_dns_name}")
+        dns = ec2inst.public_dns_name
+        logger.info(f"Public IP Address: {ec2inst.public_ip_address}")
+
+    project = dao.get(Path(os.getcwd()))
+
+    for n in project.nodes():
+        try:
+            if n[0].data.get('name') == "Route":
+                path = n[0].data['options']['values']['path']
+                if dns:
+                    logger.info(f"Endpoint: http://{dns}:8080/routes/orchestrator/endpoints/{project.id}/{path}")
+                else:
+                    logger.info(f"Endpoint: routes/orchestrator/endpoints/{project.id}/{path}")
+        except Exception as inst:
+            pass
 
 
 if __name__ == '__main__':

@@ -9,6 +9,7 @@ import requests
 from aiodocker.containers import DockerContainer
 from docker.api.build import process_dockerfile
 from docker.utils import tar
+from loguru import logger
 
 from loko_cli.business.docker.log_collector import LogCollector
 from loko_cli.business.docker.utils import search_key
@@ -112,9 +113,9 @@ class LokoDockerClient:
         # client.session = aiohttp.ClientSession(connector=client.connector, timeout=200 * 1000)
 
         path = Path(path)
-        print("Tarring the file")
+        logger.debug("Preparing the context")
         exclude = self.prepare_docker_ignore(path)
-        print("Excludes", exclude)
+        logger.debug(("Excludes", exclude))
         if dockerfile:
             context = tar(
                 path, exclude=exclude, dockerfile=("Dockerfile", dockerfile.getvalue()), gzip=True
@@ -123,6 +124,7 @@ class LokoDockerClient:
             context = tar(
                 path, exclude=exclude, dockerfile=process_dockerfile("Dockerfile", path), gzip=True
             )
+        logger.debug("Context built")
         # bname = f"{path.name}:builder"
         # self.collector.logs[bname] = []
         # await self.collector.emit_now(bname, f"Building {path.name} image...")
@@ -135,6 +137,7 @@ class LokoDockerClient:
                                               buildargs=dict(GATEWAY=GATEWAY), stream=True):
             if "stream" in line:
                 msg = line['stream'].strip()
+            logger.debug(msg)
 
             if msg:
                 last_msg = msg

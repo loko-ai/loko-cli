@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 import click
@@ -9,38 +10,50 @@ from loguru import logger
 
 
 @click.group()
-def loko():
+@click.option('--verbose', default=False, show_default=True, help='Verbose output')
+def loko(verbose):
+    if not verbose:
+        logger.remove()
+        logger.add(sys.stderr, level='INFO')
     pass
 
 
 @loko.command()
-@click.option('--push', default=True, help='Push on registry')
+@click.option('--push', default=True, help='Push on registry', show_default=True)
 @click.option('--company', required=True, type=str, help='Company name or private registry')
-@click.option('--gateway_port', default=8080, type=int, help='the gateway public port (default:8080)')
+@click.option('--gateway_port', default=8080, type=int, help='the gateway public port', show_default=True)
 def plan(push, company, gateway_port):
-    """Simple program that greets NAME for a total of COUNT times."""
-    logger.debug("Planning")
+    """Prepare the plan for the deployment of the Loko project"""
+    logger.info("Planning")
     asyncio.run(tt.plan(Path(os.getcwd()), push=push, company=company, gateway_port=gateway_port))
 
 
 @loko.command()
-@click.option("--target", default="ec2", type=click.Choice(["ec2"]))
 @click.option("--name", required=True, type=str)
-@click.option("--instance_type", default="t2.micro", type=str)
-def init(target, name, instance_type):
-    """dddd"""
+@click.option("--instance_type", default="t2.micro", show_default=True, type=str)
+def ec2(name, instance_type):
+    """Manage ec2 instances"""
     p = Path(os.getcwd())
-    asyncio.run(tt.init(p, name, instance_type))
+    asyncio.run(tt.init_ec2(p, name, instance_type))
 
 
 @loko.command()
 def deploy():
-    """dddd"""
+    """Deploy the project"""
     p = Path(os.getcwd())
     asyncio.run(tt.deploy(p))
 
 
+@loko.command()
+def info():
+    """Get info about the project status"""
+    tt.info()
+
+
 if __name__ == '__main__':
-    print(os.getcwd())
-    # asyncio.run(plan(Path(os.getcwd()), company="livetechprove"))
-    loko()
+
+    try:
+        loko()
+    except Exception as inst:
+        logger.error(inst)
+        exit(1)
