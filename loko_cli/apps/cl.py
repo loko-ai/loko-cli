@@ -51,6 +51,10 @@ def info():
     """Get info about the project status"""
     tt.info()
 
+@loko.command()
+def destroy():
+    """Destroy instances"""
+    tt.destroy()
 
 if __name__ == '__main__':
 

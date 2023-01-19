@@ -47,6 +47,11 @@ class PlanDAO:
         with open(self.path / "plan.json", "w") as o:
             json.dump(plan, o)
 
+    def delete(self):
+        p = self.path / "plan.json"
+        if p.exists():
+            p.unlink()
+
 
 base = Path.home() / "loko"
 
@@ -269,6 +274,22 @@ def info():
                     logger.info(f"Endpoint: routes/orchestrator/endpoints/{project.id}/{path}")
         except Exception as inst:
             pass
+
+
+def destroy():
+    dao = PlanDAO(Path(os.getcwd()))
+    plan = dao.get()
+    instance_id = plan.get("instance")
+    if instance_id is None:
+        logger.error("There is no instance to destroy")
+        exit(1)
+    ec2 = EC2Manager()
+    inst = ec2.get(instance_id)
+    logger.info(f"Terminating {instance_id}...")
+    inst.terminate()
+    dao.delete()
+
+    logger.info("Done!")
 
 
 if __name__ == '__main__':
