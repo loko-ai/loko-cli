@@ -185,7 +185,7 @@ CMD python services.py""")
     await client.close()
 
 
-async def init_ec2(p: Path, instance_name, instance_type="t2.micro"):
+async def init_ec2(p: Path, instance_name, instance_type="t2.micro", security_group="default"):
     ec2 = EC2Manager()
     img = "ami-0a691527202ea8b3d"
     dao = PlanDAO(p)
@@ -204,7 +204,7 @@ async def init_ec2(p: Path, instance_name, instance_type="t2.micro"):
             exit(1)
 
     if not instance_id:
-        ii = ec2.create(instance_name, img, instance_type)
+        ii = ec2.create(instance_name, img, instance_type=instance_type, security_group=security_group)
         plan['instance'] = ii.id
         dao.save(plan)
     instance_id = plan['instance']

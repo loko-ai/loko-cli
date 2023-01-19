@@ -36,6 +36,12 @@ class EC2Manager:
                 return inst
         raise Exception("Instance not found")
 
+    def get_security_group(self, id):
+        for g in self.ec2.security_groups.all():
+            if g.id == id:
+                return g
+        raise Exception("Group not found")
+
     def wait_for(self, id, status_name, t=5):
         while True:
             inst = self.get(id)
@@ -52,15 +58,14 @@ class EC2Manager:
             Filters.append(dict(Name=f"tag:{k}", Values=listify(v)))
         return self.ec2.instances.filter(Filters=Filters)
 
-    def create(self, name, img, instance_type="t2.micro"):
-        instances = self.ec2.create_instances(
-            ImageId=img,
-            MinCount=1,
-            MaxCount=1,
-            InstanceType=instance_type,
-            KeyName=self.pem.stem,
-            BlockDeviceMappings=blockDeviceMappings
-        )
+    def create(self, name, img, security_group="default", instance_type="t2.micro"):
+        args = dict(ImageId=img,
+                    MinCount=1,
+                    MaxCount=1,
+                    InstanceType=instance_type,
+                    KeyName=self.pem.stem,
+                    BlockDeviceMappings=blockDeviceMappings, SecurityGroups=[security_group])
+        instances = self.ec2.create_instances(**args)
 
         instance_id = instances[0].instance_id
         tag = {

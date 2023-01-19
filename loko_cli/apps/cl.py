@@ -29,12 +29,14 @@ def plan(push, company, gateway_port):
 
 
 @loko.command()
-@click.option("--name", required=True, type=str)
-@click.option("--instance_type", default="t2.micro", show_default=True, type=str)
-def ec2(name, instance_type):
+@click.option("--name", required=True, type=str, help="the name of the instance")
+@click.option("--security_group", default="default", help="the security group associated to the instance",
+              show_default=True, type=str)
+@click.option("--instance_type", default="t2.micro", help="the instance type", show_default=True, type=str)
+def ec2(name, security_group, instance_type):
     """Manage ec2 instances"""
     p = Path(os.getcwd())
-    asyncio.run(tt.init_ec2(p, name, instance_type))
+    asyncio.run(tt.init_ec2(p, name, instance_type, security_group))
 
 
 @loko.command()
