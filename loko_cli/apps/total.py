@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import shutil
+import sys
 import time
 from io import StringIO
 from pathlib import Path
@@ -115,7 +116,7 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
                             msg = json.loads(line.decode())
                             if "error" in msg:
                                 logger.error(msg)
-                                exit(1)
+                                sys.exit(1)
                             logger.debug(msg)
 
             # Build orchestrator
@@ -149,7 +150,7 @@ CMD python services.py""")
                         msg = json.loads(line.decode())
                         if "error" in msg:
                             logger.error(msg)
-                            exit(1)
+                            sys.exit(1)
                         logger.debug(msg)
                     logger.info(f"Pushed")
 
@@ -159,7 +160,7 @@ CMD python services.py""")
                     msg = json.loads(line.decode())
                     if "error" in msg:
                         logger.error(msg)
-                        exit(1)
+                        sys.exit(1)
                     logger.debug(msg)
                 logger.info(f"Pushed")
 
@@ -190,9 +191,10 @@ CMD python services.py""")
     await client.close()
 
 
-async def init_ec2(p: Path, instance_name, instance_type="t2.micro", security_group="default"):
+async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a691527202ea8b3d",
+                   security_group="default"):
     ec2 = EC2Manager()
-    img = "ami-0a691527202ea8b3d"
+
     dao = PlanDAO(p)
     plan = dao.get()
     instance_id = plan.get("instance")
@@ -203,13 +205,13 @@ async def init_ec2(p: Path, instance_name, instance_type="t2.micro", security_gr
             state = inst.state['Name']
             if state != "running":
                 logger.error(f"EC2 instance {instance_id} is in state {state}")
-                exit(1)
+                sys.exit(1)
         except Exception as e:
             logger.error(e)
-            exit(1)
+            sys.exit(1)
 
     if not instance_id:
-        ii = ec2.create(instance_name, img, instance_type=instance_type, security_group=security_group)
+        ii = ec2.create(instance_name, ami, instance_type=instance_type, security_group=security_group)
         plan['instance'] = ii.id
         dao.save(plan)
     instance_id = plan['instance']
@@ -233,7 +235,7 @@ async def deploy(p: Path):
     logger.info(f"Deploying to {instance_id}...")
     if inst.state['Name'] != "running":
         logger.error(f"Can't deploy. Instance {instance_id} is in state {inst.state['Name']}")
-        exit(1)
+        sys.exit(1)
 
     ec2.copy([p / "docker-compose.yml"],
              inst.public_dns_name)
@@ -256,7 +258,7 @@ def info():
             ec2inst = ec2.get(instance_id)
         except Exception as e:
             logger.error(e)
-            exit(1)
+            sys.exit(1)
         logger.info(f"Instance {instance_id} status: {ec2inst.state['Name']}")
         logger.info(f"Public DNS name: {ec2inst.public_dns_name}")
         dns = ec2inst.public_dns_name
@@ -282,7 +284,7 @@ def destroy():
     instance_id = plan.get("instance")
     if instance_id is None:
         logger.error("There is no instance to destroy")
-        exit(1)
+        sys.exit(1)
     ec2 = EC2Manager()
     inst = ec2.get(instance_id)
     logger.info(f"Terminating {instance_id}...")

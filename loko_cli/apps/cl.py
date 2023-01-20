@@ -33,10 +33,11 @@ def plan(push, company, gateway_port):
 @click.option("--security_group", default="default", help="the security group associated to the instance",
               show_default=True, type=str)
 @click.option("--instance_type", default="t2.micro", help="the instance type", show_default=True, type=str)
-def ec2(name, security_group, instance_type):
+@click.option("--ami", default="ami-0a691527202ea8b3d", help="the instance ami", show_default=True, type=str)
+def ec2(name, security_group, instance_type, ami):
     """Manage ec2 instances"""
     p = Path(os.getcwd())
-    asyncio.run(tt.init_ec2(p, name, instance_type, security_group))
+    asyncio.run(tt.init_ec2(p, name, instance_type, ami, security_group))
 
 
 @loko.command()
@@ -51,10 +52,12 @@ def info():
     """Get info about the project status"""
     tt.info()
 
+
 @loko.command()
 def destroy():
     """Destroy instances"""
     tt.destroy()
+
 
 if __name__ == '__main__':
 
@@ -62,4 +65,4 @@ if __name__ == '__main__':
         loko()
     except Exception as inst:
         logger.error(inst)
-        exit(1)
+        sys.exit(1)
