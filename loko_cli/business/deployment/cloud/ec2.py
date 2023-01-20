@@ -59,12 +59,21 @@ class EC2Manager:
         return self.ec2.instances.filter(Filters=Filters)
 
     def create(self, name, img, security_group="default", instance_type="t2.micro"):
-        args = dict(ImageId=img,
-                    MinCount=1,
-                    MaxCount=1,
-                    InstanceType=instance_type,
-                    KeyName=self.pem.stem,
-                    BlockDeviceMappings=blockDeviceMappings, SecurityGroups=[security_group])
+        if security_group == "default":
+            args = dict(ImageId=img,
+                        MinCount=1,
+                        MaxCount=1,
+                        InstanceType=instance_type,
+                        KeyName=self.pem.stem,
+                        BlockDeviceMappings=blockDeviceMappings)
+        else:
+            args = dict(ImageId=img,
+                        MinCount=1,
+                        MaxCount=1,
+                        InstanceType=instance_type,
+                        KeyName=self.pem.stem,
+                        BlockDeviceMappings=blockDeviceMappings, SecurityGroupIds=[security_group])
+
         instances = self.ec2.create_instances(**args)
 
         instance_id = instances[0].instance_id
