@@ -19,6 +19,11 @@ from loko_cli.config.app_init import YAML
 from loko_cli.dao.loko import FSLokoProjectDAO
 from loko_cli.utils.path_utils import set_directory
 
+pred_env = ["IMGS_MAPPING=\"{'predictor_base': 'lokoai/ds4biz-predictor-base:0.0.3-dev'}\"",
+            "GATEWAY_URL=http://gateway:8080", "NETWORK_NAME=loko"]
+core_images = dict(predictor=dict(image="lokoai/ds4biz-predictor-dm:0.0.4-dev", environment=pred_env,
+                                  volumes=["/var/run/docker.sock:/var/run/docker.sock"]))
+
 
 def prepare_docker_ignore(path):
     dockerignore = os.path.join(path, '.dockerignore')
@@ -81,16 +86,22 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
     RULES = [
         {"name": "orchestrator", "host": "orchestrator", "port": 8888, "type": "orchestrator", "scan": True}]
     if has_local:
-        RULES.append(dict(name=name, host=name, port=8080, type="custom"))
+        RULES.append(dict(name=name, host=name, port=8080, type="custom", scan=False))
 
     services = {}
+    project_config_path = p / "config.json"
+    project_config = {}
+    if project_config_path.exists():
+        with open(project_config_path) as o:
+            project_config = json.load(o)
 
-    ges = list(project.get_global_components())
+    ges = set(project.get_global_components())
     with set_directory(p):
         with TemporaryDirectory(dir=".") as d:
             d = Path(d)
             if ges:
                 for ge in ges:
+                    _ge = ge
                     ge = base / "shared" / "extensions" / ge / "extensions" / "components.json"
                     rel = ge.relative_to(base)
                     dest = d / rel
@@ -98,43 +109,68 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
                     shutil.copyfile(ge, dest)
                     root = ge.parent.parent
                     config_path = root / "config.json"
+                    df = root / "Dockerfile"
+                    docker_cmds = [x.strip() for x in open(df) if x.strip()]
                     if config_path.exists():
                         with config_path.open() as cf:
                             config = json.load(cf)
                             sides = config.get("side_containers", {})
                             for k, v in sides.items():
                                 services[f"{root.name}_{k}"] = dict(image=v['image'])
+                            includes = project_config.get("includes", {}).get(_ge, [])
+                            with set_directory(base / "shared" / "extensions" / _ge), TemporaryDirectory(
+                                    dir=".") as dd:
+                                dd = Path(dd)
+                                for incl in includes:
+                                    source = incl.get("source")
+                                    target = incl.get("target")
+                                    source = Path(source)
+                                    tt = dd / "includes"
+                                    shutil.copytree(source, tt)
+                                    docker_cmds.append(f"COPY {tt} {target}")
 
-                    GE_IMAGE_NAME = f"{company}/{root.name}"
-                    logger.info(f"Building global extension: {GE_IMAGE_NAME}")
-                    resp = await client.build(root, GE_IMAGE_NAME)
-                    if resp:
-                        logger.info("Build successful")
-                    if push:
-                        logger.info(f"Pushing {GE_IMAGE_NAME}")
-                        for line in client2.images.push(GE_IMAGE_NAME, stream=True):
-                            msg = json.loads(line.decode())
-                            if "error" in msg:
-                                logger.error(msg)
-                                sys.exit(1)
-                            logger.debug(msg)
+                                finaldf = StringIO()
+                                finaldf.write("\n".join(docker_cmds))
+                                finaldf.seek(0)
+
+                                GE_IMAGE_NAME = f"{company}/{root.name}"
+                                logger.info(f"Building global extension: {GE_IMAGE_NAME}")
+                                resp = await client.build(root, dockerfile=finaldf, image=GE_IMAGE_NAME)
+                                if resp:
+                                    logger.info("Build successful")
+                                if push:
+                                    logger.info(f"Pushing {GE_IMAGE_NAME}")
+                                    for line in client2.images.push(GE_IMAGE_NAME, stream=True):
+                                        msg = json.loads(line.decode())
+                                        if "error" in msg:
+                                            logger.error(msg)
+                                            sys.exit(1)
+                                        logger.debug(msg)
 
             # Build orchestrator
+            resources = set(project.get_required_resources())
+
+            logger.info(f"Resources: {resources}")
             ORCH_IMAGE = f"{company}/{name}_orchestrator"
             os.chdir(project.path)
+            orchestrator_commands = ["FROM lokoai/loko-orchestrator:1.0.0-dev",
+                                     f"RUN mkdir -p /root/loko/projects/{name}", f"COPY . /root/loko/projects/{name}/",
+                                     "CMD python services.py"]
+
+            for r in resources:
+                r = Path(r).relative_to("data")
+                dest = d / r
+                if not dest.parent.exists():
+                    dest.parent.mkdir(exist_ok=True, parents=True)
+                shutil.copyfile(base / r, d / r)
+                logger.info(f"Copying {base / r} to {d / r}")
+                orchestrator_commands.append(f"COPY {d / r} /root/loko/{r}")
+
             df = StringIO()
             if ges:
-                df.write(f"""FROM lokoai/loko-orchestrator:0.0.4-dev
-RUN mkdir -p /root/loko/projects/{name}
-COPY . /root/loko/projects/{name}/
-COPY {d}/shared/ /root/loko/shared/
-CMD python services.py""")
-            else:
-                df.write(f"""FROM lokoai/loko-orchestrator:0.0.3-dev
-    RUN mkdir -p /root/loko/projects/{name}
-    COPY . /root/loko/projects/{name}/
-    CMD python services.py""")
+                orchestrator_commands.append(f"COPY {d}/shared/ /root/loko/shared/")
 
+            df.write("\n".join(orchestrator_commands))
             df.seek(0)
 
             logger.info(f"Building orchestrator: {ORCH_IMAGE}")
@@ -168,19 +204,49 @@ CMD python services.py""")
 
             for ge in ges:
                 services[ge] = dict(image=f"{company}/{ge}")
-                RULES.append(dict(name=ge, host=ge, port=8080, type="custom"))
+                RULES.append(dict(name=ge, host=ge, port=8080, type="custom", scan=False))
 
             services['orchestrator'] = dict(image=ORCH_IMAGE,
                                             volumes=["/var/run/docker.sock:/var/run/docker.sock"],
                                             command="python services.py",
                                             environment=dict(GATEWAY="http://gateway:8080",
                                                              EXTERNAL_GATEWAY=f"http://localhost:{gateway_port}", ))
-            services['gateway'] = dict(image="lokoai/loko-gateway:0.0.4-dev", ports=[f"{gateway_port}:8080"],
-                                       environment=dict(RULES=str(RULES)))
+
             if has_local:
                 services[name] = dict(image=MAIN_IMAGE)
 
             dc = dict(version="3.3", services=services)
+
+            """for core in set(project.get_core_components()):
+                includes = project_config.get("includes", {}).get(core, [])
+                if includes:
+                    core_docker_cmds = [f"FROM {core_images[core]['image']}"]
+                    for incl in includes:
+                        source = Path(incl.get("source"))
+                        target = incl.get("target")
+                        tsource = d / "predictors" / source.name
+                        shutil.copytree(source, tsource)
+                        core_docker_cmds.append(f"COPY {tsource} {target}")
+                        CORE_IMAGE = f"{company}/{p.name}_{core}"
+
+                        logger.info(f"Building {core}: {CORE_IMAGE}")
+                        finaldf = StringIO()
+                        finaldf.write("\n".join(core_docker_cmds))
+                        finaldf.seek(0)
+                        print("\n".join(core_docker_cmds))
+
+                        resp = await client.build(project.path, dockerfile=finaldf, image=CORE_IMAGE,
+                                                  log_collector=aprint)
+                        if resp:
+                            logger.info("Build successful")
+                        core_images[core]['image'] = CORE_IMAGE
+
+                services[core] = core_images[core]
+
+                RULES.append(dict(name=core, host=core, port=8080, type=core, scan=False))"""
+
+            services['gateway'] = dict(image="lokoai/loko-gateway:0.0.4-dev", ports=[f"{gateway_port}:8080"],
+                                       environment=dict(RULES=str(RULES)))
 
             logger.info("Creating docker-compose")
 
@@ -292,11 +358,3 @@ def destroy():
     dao.delete()
 
     logger.info("Done!")
-
-
-if __name__ == '__main__':
-    p = Path("/home/fulvio/loko/projects/prova_mongo")
-
-    asyncio.run(plan(p, "livetechprove", push=True))
-    asyncio.run(init(p, "fp"))
-    asyncio.run(deploy(p))
