@@ -7,15 +7,50 @@ from pathlib import Path
 import aiodocker
 import requests
 from aiodocker.containers import DockerContainer
-from docker.api.build import process_dockerfile
+from docker import constants
 from docker.utils import tar
 from loguru import logger
 
 from loko_cli.business.docker.log_collector import LogCollector
 from loko_cli.business.docker.utils import search_key
+import os
+import random
 
 GATEWAY = ""
 DEVELOPMENT = True
+
+
+def process_dockerfile(dockerfile, path):
+    if not dockerfile:
+        return (None, None)
+
+    abs_dockerfile = dockerfile
+    if not os.path.isabs(dockerfile):
+        abs_dockerfile = os.path.join(path, dockerfile)
+        if constants.IS_WINDOWS_PLATFORM and str(path).startswith(
+                constants.WINDOWS_LONGPATH_PREFIX):
+            abs_dockerfile = '{}{}'.format(
+                constants.WINDOWS_LONGPATH_PREFIX,
+                os.path.normpath(
+                    abs_dockerfile[len(constants.WINDOWS_LONGPATH_PREFIX):]
+                )
+            )
+    if (os.path.splitdrive(path)[0] != os.path.splitdrive(abs_dockerfile)[0] or
+            str(os.path.relpath(abs_dockerfile, path)).startswith('..')):
+        # Dockerfile not in context - read data to insert into tar later
+        with open(abs_dockerfile) as df:
+            return (
+                f'.dockerfile.{random.getrandbits(160):x}',
+                df.read()
+            )
+
+    # Dockerfile is inside the context - return path relative to context root
+    if dockerfile == abs_dockerfile:
+        # Only calculate relpath if necessary to avoid errors
+        # on Windows client -> Linux Docker
+        # see https://github.com/docker/compose/issues/5969
+        dockerfile = os.path.relpath(abs_dockerfile, path)
+    return (dockerfile, None)
 
 
 def gateway_route(id, host=None, port=8080):
