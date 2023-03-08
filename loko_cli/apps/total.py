@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import time
+import re
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -79,7 +80,7 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
         # Build a local extension
         MAIN_IMAGE = f"{company}/{project.path.name}"
         logger.info(f"Building {MAIN_IMAGE}")
-        resp = await client.build(project.path, image=MAIN_IMAGE)
+        resp = await client.build(project.path, image=MAIN_IMAGE, log_collector=aprint)
         if resp:
             logger.info("Build successful")
 
@@ -125,9 +126,10 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
                                     source = incl.get("source")
                                     target = incl.get("target")
                                     source = Path(source)
+                                    target = Path(target)
                                     tt = dd / "includes"
                                     shutil.copytree(source, tt)
-                                    docker_cmds.append(f"COPY {tt} {target}")
+                                    docker_cmds.append(f"COPY {tt.as_posix()} {target.as_posix()}")
 
                                 finaldf = StringIO()
                                 finaldf.write("\n".join(docker_cmds))
@@ -141,11 +143,12 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
                                 if push:
                                     logger.info(f"Pushing {GE_IMAGE_NAME}")
                                     for line in client2.images.push(GE_IMAGE_NAME, stream=True):
-                                        msg = json.loads(line.decode())
-                                        if "error" in msg:
-                                            logger.error(msg)
-                                            sys.exit(1)
-                                        logger.debug(msg)
+                                        for ll in [x.strip() for x in re.split("\r\n|\r|\n",line.decode()) if x.strip()]:
+                                            msg = json.loads(ll)
+                                            if "error" in msg:
+                                                logger.error(msg)
+                                                sys.exit(1)
+                                            logger.debug(msg)
 
             # Build orchestrator
             resources = set(project.get_required_resources())
@@ -164,7 +167,9 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
                     dest.parent.mkdir(exist_ok=True, parents=True)
                 shutil.copyfile(base / r, d / r)
                 logger.info(f"Copying {base / r} to {d / r}")
-                orchestrator_commands.append(f"COPY {d / r} /root/loko/{r}")
+                ss=(d/r)
+                tt=Path('/root/loko')/r
+                orchestrator_commands.append(f"COPY {ss.as_posix()} {tt.as_posix()}")
 
             df = StringIO()
             if ges:
@@ -183,21 +188,23 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
                     logger.info(f"Pushing {MAIN_IMAGE}")
 
                     for line in client2.images.push(MAIN_IMAGE, stream=True):
-                        msg = json.loads(line.decode())
-                        if "error" in msg:
-                            logger.error(msg)
-                            sys.exit(1)
-                        logger.debug(msg)
+                        for ll in [x.strip() for x in re.split("\r\n|\r|\n",line.decode()) if x.strip()]:
+                            msg = json.loads(ll)
+                            if "error" in msg:
+                                logger.error(msg)
+                                sys.exit(1)
+                            logger.debug(msg)
                     logger.info(f"Pushed")
 
                 logger.info(f"Pushing {ORCH_IMAGE}")
 
                 for line in client2.images.push(ORCH_IMAGE, stream=True):
-                    msg = json.loads(line.decode())
-                    if "error" in msg:
-                        logger.error(msg)
-                        sys.exit(1)
-                    logger.debug(msg)
+                    for ll in [x.strip() for x in re.split("\r\n|\r|\n",line.decode()) if x.strip()]:
+                        msg = json.loads(ll)
+                        if "error" in msg:
+                            logger.error(msg)
+                            sys.exit(1)
+                        logger.debug(msg)
                 logger.info(f"Pushed")
 
             # Generate docker-compose
@@ -358,3 +365,5 @@ def destroy():
     dao.delete()
 
     logger.info("Done!")
+
+

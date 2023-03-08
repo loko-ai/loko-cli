@@ -64,5 +64,5 @@ if __name__ == '__main__':
     try:
         loko()
     except Exception as inst:
-        logger.error(inst)
+        logger.exception(inst)
         sys.exit(1)
