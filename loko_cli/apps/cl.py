@@ -9,7 +9,7 @@ import loko_cli.apps.total as tt
 from loguru import logger
 
 
-@click.group(name="loko", help="version 0.0.2")
+@click.group(name="loko", help="version 0.0.3")
 @click.option('--verbose', default=False, show_default=True, help='Verbose output')
 def loko(verbose):
     if not verbose:
@@ -64,5 +64,5 @@ if __name__ == '__main__':
     try:
         loko()
     except Exception as inst:
-        logger.exception(inst)
+        logger.error(inst)
         sys.exit(1)
