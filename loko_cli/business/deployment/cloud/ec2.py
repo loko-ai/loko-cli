@@ -26,8 +26,10 @@ blockDeviceMappings = [
 
 
 class EC2Manager:
-    def __init__(self, region_name='eu-central-1', pem=Path.home() / "loko.pem"):
-        self.ec2 = boto3.resource('ec2', region_name=region_name)
+    def __init__(self, region_name=None, pem=Path.home() / "loko.pem"):
+        my_session = boto3.session.Session()
+        my_region = my_session.region_name
+        self.ec2 = boto3.resource('ec2', region_name=region_name or my_region)
         self.pem = pem
 
     def get(self, id):

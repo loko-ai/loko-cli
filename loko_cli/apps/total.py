@@ -143,7 +143,8 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
                                 if push:
                                     logger.info(f"Pushing {GE_IMAGE_NAME}")
                                     for line in client2.images.push(GE_IMAGE_NAME, stream=True):
-                                        for ll in [x.strip() for x in re.split("\r\n|\r|\n",line.decode()) if x.strip()]:
+                                        for ll in [x.strip() for x in re.split("\r\n|\r|\n", line.decode()) if
+                                                   x.strip()]:
                                             msg = json.loads(ll)
                                             if "error" in msg:
                                                 logger.error(msg)
@@ -167,8 +168,8 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
                     dest.parent.mkdir(exist_ok=True, parents=True)
                 shutil.copyfile(base / r, d / r)
                 logger.info(f"Copying {base / r} to {d / r}")
-                ss=(d/r)
-                tt=Path('/root/loko')/r
+                ss = (d / r)
+                tt = Path('/root/loko') / r
                 orchestrator_commands.append(f"COPY {ss.as_posix()} {tt.as_posix()}")
 
             df = StringIO()
@@ -188,7 +189,7 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
                     logger.info(f"Pushing {MAIN_IMAGE}")
 
                     for line in client2.images.push(MAIN_IMAGE, stream=True):
-                        for ll in [x.strip() for x in re.split("\r\n|\r|\n",line.decode()) if x.strip()]:
+                        for ll in [x.strip() for x in re.split("\r\n|\r|\n", line.decode()) if x.strip()]:
                             msg = json.loads(ll)
                             if "error" in msg:
                                 logger.error(msg)
@@ -199,7 +200,7 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
                 logger.info(f"Pushing {ORCH_IMAGE}")
 
                 for line in client2.images.push(ORCH_IMAGE, stream=True):
-                    for ll in [x.strip() for x in re.split("\r\n|\r|\n",line.decode()) if x.strip()]:
+                    for ll in [x.strip() for x in re.split("\r\n|\r|\n", line.decode()) if x.strip()]:
                         msg = json.loads(ll)
                         if "error" in msg:
                             logger.error(msg)
@@ -365,5 +366,3 @@ def destroy():
     dao.delete()
 
     logger.info("Done!")
-
-
