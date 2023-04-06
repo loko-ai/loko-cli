@@ -9,7 +9,7 @@ import loko_cli.apps.total as tt
 from loguru import logger
 
 
-@click.group(name="loko", help="version 0.0.3")
+@click.group(name="loko", help="version 0.0.4")
 @click.option('--verbose', default=False, show_default=True, help='Verbose output')
 def loko(verbose):
     if not verbose:
