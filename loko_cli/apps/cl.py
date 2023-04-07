@@ -36,17 +36,19 @@ def plan(push, company, gateway_port, https):
 @click.option("--instance_type", default="t2.micro", help="the instance type", show_default=True, type=str)
 @click.option("--ami", default="ami-0a691527202ea8b3d", help="the instance ami", show_default=True, type=str)
 @click.option("--device_volume_size", default=30, help="the instance volume size in GigaBytes", show_default=True, type=int)
-def ec2(name, security_group, instance_type, ami, device_volume_size):
+@click.option("--pem", default=Path.home() / "loko.pem", help="the aws key path", show_default=True, type=str)
+def ec2(name, security_group, instance_type, ami, device_volume_size, pem):
     """Manage ec2 instances"""
     p = Path(os.getcwd())
-    asyncio.run(tt.init_ec2(p, name, instance_type, ami, security_group, device_volume_size))
+    asyncio.run(tt.init_ec2(p, name, instance_type, ami, security_group, device_volume_size, pem))
 
 
 @loko.command()
-def deploy():
+@click.option("--pem", default=Path.home() / "loko.pem", help="the aws key path", show_default=True, type=str)
+def deploy(pem):
     """Deploy the project"""
     p = Path(os.getcwd())
-    asyncio.run(tt.deploy(p))
+    asyncio.run(tt.deploy(p, pem))
 
 
 @loko.command()

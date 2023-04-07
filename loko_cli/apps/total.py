@@ -288,8 +288,8 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False)
 
 
 async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a691527202ea8b3d",
-                   security_group="default", device_volume_size=30):
-    ec2 = EC2Manager()
+                   security_group="default", device_volume_size=30, pem=None):
+    ec2 = EC2Manager(pem=pem)
 
     dao = PlanDAO(p)
     plan = dao.get()
@@ -321,8 +321,8 @@ async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a
     logger.info(f"Public IP Address: {inst.public_ip_address}")
 
 
-async def deploy(p: Path):
-    ec2 = EC2Manager()
+async def deploy(p: Path, pem=None):
+    ec2 = EC2Manager(pem=pem)
     dao = PlanDAO(p)
     plan = dao.get()
     instance_id = plan.get("instance")
