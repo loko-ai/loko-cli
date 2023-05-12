@@ -35,7 +35,8 @@ def plan(push, company, gateway_port, https):
               show_default=True, type=str)
 @click.option("--instance_type", default="t2.micro", help="the instance type", show_default=True, type=str)
 @click.option("--ami", default="ami-0a691527202ea8b3d", help="the instance ami", show_default=True, type=str)
-@click.option("--device_volume_size", default=30, help="the instance volume size in GigaBytes", show_default=True, type=int)
+@click.option("--device_volume_size", default=30, help="the instance volume size in GigaBytes", show_default=True,
+              type=int)
 @click.option("--pem", default=Path.home() / "loko.pem", help="the aws key path", show_default=True, type=str)
 def ec2(name, security_group, instance_type, ami, device_volume_size, pem):
     """Manage ec2 instances"""
@@ -82,5 +83,5 @@ if __name__ == '__main__':
     try:
         loko()
     except Exception as inst:
-        logger.exception(inst)
+        logger.error(inst)
         sys.exit(1)
