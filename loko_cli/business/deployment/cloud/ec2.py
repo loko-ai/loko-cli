@@ -31,6 +31,8 @@ class EC2Manager:
         my_session = boto3.session.Session()
         my_region = my_session.region_name
         self.ec2 = boto3.resource('ec2', region_name=region_name or my_region)
+        if isinstance(pem, str):
+            pem = Path(pem)
         self.pem = pem
 
     def get(self, id):

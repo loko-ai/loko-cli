@@ -289,7 +289,7 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False)
 
 
 async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a691527202ea8b3d",
-                   security_group="default", device_volume_size=30, region_name=None, pem=None):
+                   security_group="default", device_volume_size=30, pem=None, region_name=None):
     ec2 = EC2Manager(pem=pem, region_name=region_name)
 
     dao = PlanDAO(p)
