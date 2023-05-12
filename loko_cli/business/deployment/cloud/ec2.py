@@ -13,16 +13,17 @@ def listify(o):
         return o
 
 
-blockDeviceMappings = [
-    {
-        'DeviceName': "/dev/sda1",
-        'Ebs': {
-            'DeleteOnTermination': True,
-            'VolumeSize': 30,
-            'VolumeType': 'gp2'
-        }
-    },
-]
+def blockDeviceMappings(device_volume_size=30):
+    return [
+        {
+            'DeviceName': '/dev/sda1',
+            'Ebs': {
+                'DeleteOnTermination': True,
+                'VolumeSize': device_volume_size,
+                'VolumeType': 'gp2'
+            }
+        },
+    ]
 
 
 class EC2Manager:
@@ -60,21 +61,24 @@ class EC2Manager:
             Filters.append(dict(Name=f"tag:{k}", Values=listify(v)))
         return self.ec2.instances.filter(Filters=Filters)
 
-    def create(self, name, img, security_group="default", instance_type="t2.micro"):
+    def create(self, name, img, security_group="default", instance_type="t2.micro",
+               device_volume_size=30):
+
         if security_group == "default":
             args = dict(ImageId=img,
                         MinCount=1,
                         MaxCount=1,
                         InstanceType=instance_type,
                         KeyName=self.pem.stem,
-                        BlockDeviceMappings=blockDeviceMappings)
+                        BlockDeviceMappings=blockDeviceMappings(device_volume_size))
         else:
             args = dict(ImageId=img,
                         MinCount=1,
                         MaxCount=1,
                         InstanceType=instance_type,
                         KeyName=self.pem.stem,
-                        BlockDeviceMappings=blockDeviceMappings, SecurityGroupIds=[security_group])
+                        BlockDeviceMappings=blockDeviceMappings(device_volume_size),
+                        SecurityGroupIds=[security_group])
 
         instances = self.ec2.create_instances(**args)
 

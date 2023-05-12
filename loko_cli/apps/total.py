@@ -12,6 +12,8 @@ from tempfile import TemporaryDirectory
 import docker
 from docker.utils import tar
 from loguru import logger
+from ruamel.yaml import CommentedMap, CommentedSeq, CommentToken
+from ruamel.yaml.error import CommentMark
 from tenacity import retry
 
 from loko_cli.business.deployment.cloud.ec2 import EC2Manager
@@ -67,9 +69,12 @@ async def aprint(arg):
     logger.debug(arg['msg'])
 
 
-async def plan(p: Path, company: str, gateway_port=8080, push=True):
+async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False):
     dao = FSLokoProjectDAO()
     project = dao.get(p)
+    plan_dao = PlanDAO(p)
+    pplan = plan_dao.get()
+    pplan['https'] = https
     client2 = docker.from_env()
     # company = "livetechprove"
     # Has a dockerfile
@@ -256,18 +261,36 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True):
             services['gateway'] = dict(image="lokoai/loko-gateway:0.0.4-dev", ports=[f"{gateway_port}:8080"],
                                        environment=dict(RULES=str(RULES)))
 
+            if https:
+                vv = ['./nginx.conf:/etc/nginx/nginx.conf:ro',
+                      './certbot/www:/var/www/certbot/:ro',
+                      './certbot/conf/:/etc/nginx/ssl/:ro']
+                vv = CommentedSeq(vv)
+                vv.yaml_set_comment_before_after_key(1, "- ./nginx-443.conf:/etc/nginx/nginx.conf:ro", 6)
+
+                nginx = dict(image='nginx:latest',
+                             volumes=vv,
+                             environment=dict(TZ='Europe/Rome'),
+                             ports=['80:80', '443:443'])
+                nginx = CommentedMap(**nginx)
+                c = nginx.ca.items.setdefault('volumes', [None, [], None, None])
+                c[3] = [CommentToken('######## if you want use HTTPS, edit this volume mounting nginx-443.conf\n',
+                                     CommentMark(6))]
+                services['nginx'] = nginx
+
             logger.info("Creating docker-compose")
 
             with open("docker-compose.yml", "w") as o:
                 YAML.dump(dc, o)
+            plan_dao.save(pplan)
             logger.info("Done!")
 
     await client.close()
 
 
 async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a691527202ea8b3d",
-                   security_group="default"):
-    ec2 = EC2Manager()
+                   security_group="default", device_volume_size=30, region_name=None, pem=None):
+    ec2 = EC2Manager(pem=pem, region_name=region_name)
 
     dao = PlanDAO(p)
     plan = dao.get()
@@ -285,7 +308,8 @@ async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a
             sys.exit(1)
 
     if not instance_id:
-        ii = ec2.create(instance_name, ami, instance_type=instance_type, security_group=security_group)
+        ii = ec2.create(instance_name, ami, instance_type=instance_type, security_group=security_group,
+                        device_volume_size=device_volume_size)
         plan['instance'] = ii.id
         dao.save(plan)
     instance_id = plan['instance']
@@ -298,8 +322,8 @@ async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a
     logger.info(f"Public IP Address: {inst.public_ip_address}")
 
 
-async def deploy(p: Path):
-    ec2 = EC2Manager()
+async def deploy(p: Path, pem=None):
+    ec2 = EC2Manager(pem=pem)
     dao = PlanDAO(p)
     plan = dao.get()
     instance_id = plan.get("instance")
@@ -310,9 +334,11 @@ async def deploy(p: Path):
     if inst.state['Name'] != "running":
         logger.error(f"Can't deploy. Instance {instance_id} is in state {inst.state['Name']}")
         sys.exit(1)
-
-    ec2.copy([p / "docker-compose.yml"],
-             inst.public_dns_name)
+    fpaths = [p / "docker-compose.yml"]
+    if plan.get('https'):
+        fpaths.append(Path(__file__) / "../../resources/nginx/nginx.conf")
+        fpaths.append(Path(__file__) / "../../resources/nginx/nginx-443.conf")
+    ec2.copy(fpaths, inst.public_dns_name)
     for el in ec2.commands(["docker-compose down", "docker-compose pull", "docker-compose up -d"],
                            inst.public_dns_name):
         logger.info(el.strip())
@@ -363,6 +389,7 @@ def destroy():
     inst = ec2.get(instance_id)
     logger.info(f"Terminating {instance_id}...")
     inst.terminate()
-    dao.delete()
+    del plan["instance"]
+    dao.save(plan)
 
     logger.info("Done!")
