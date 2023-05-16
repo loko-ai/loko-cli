@@ -16,6 +16,7 @@ from ruamel.yaml import CommentedMap, CommentedSeq, CommentToken
 from ruamel.yaml.error import CommentMark
 from tenacity import retry
 
+from loko_cli.business.deployment.cloud.azure import AzureManager
 from loko_cli.business.deployment.cloud.ec2 import EC2Manager
 from loko_cli.business.docker.dockermanager import LokoDockerClient
 from loko_cli.config.app_init import YAML
@@ -310,6 +311,7 @@ async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a
     if not instance_id:
         ii = ec2.create(instance_name, ami, instance_type=instance_type, security_group=security_group,
                         device_volume_size=device_volume_size)
+        plan['cloud'] = 'aws'
         plan['instance'] = ii.id
         dao.save(plan)
     instance_id = plan['instance']
@@ -321,16 +323,59 @@ async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a
     logger.info(f"Public DNS name: {inst.public_dns_name}")
     logger.info(f"Public IP Address: {inst.public_ip_address}")
 
+async def init_azure(p: Path, name, instance_type, img, resource_group, security_group,
+                     device_volume_size=30, pem=None):
 
-async def deploy(p: Path, pem=None):
-    ec2 = EC2Manager(pem=pem)
+    azure = AzureManager(pem=pem)
+
     dao = PlanDAO(p)
     plan = dao.get()
     instance_id = plan.get("instance")
-    inst = ec2.get(instance_id)
+    logger.info("Creating Azure VM")
+    if instance_id:
+        try:
+            inst = azure.get(instance_id)
+            state = inst.state['Name']
+            if state != "running":
+                logger.error(f"Azure VM {instance_id} is in state {state}")
+                sys.exit(1)
+        except Exception as e:
+            logger.error(e)
+            sys.exit(1)
+
+    else:
+        ii = azure.create(name, img=img, rg_name=resource_group, sg_name=security_group, instance_type=instance_type,
+                          device_volume_size=device_volume_size)
+
+        plan['cloud'] = 'azure'
+        plan['instance'] = ii.id
+        dao.save(plan)
+    instance_id = plan['instance']
+    # logger.info("Waiting for instance running state...")
+    # ec2.wait_for(instance_id, "running")
+
+    logger.info(f"VM {instance_id} is running")
+    inst = azure.get(instance_id)
+    logger.info(f"Public IP Address: {inst.public_ip_address}")
+
+async def deploy(p: Path, pem=None):
+    dao = PlanDAO(p)
+    plan = dao.get()
+    cloud = plan.get('cloud')
+    instance_id = plan.get("instance")
+    manager = None
+    if cloud == 'aws':
+        manager = EC2Manager(pem=pem)
     # img = "ami-06ce824c157700cd2"
     # ec2.create("accenture", img)
+    if cloud == 'azure':
+        manager = AzureManager(pem=pem)
+    if not manager:
+        logger.error("No instance found")
+        sys.exit(1)
+    inst = manager.get(instance_id)
     logger.info(f"Deploying to {instance_id}...")
+
     if inst.state['Name'] != "running":
         logger.error(f"Can't deploy. Instance {instance_id} is in state {inst.state['Name']}")
         sys.exit(1)
@@ -338,9 +383,9 @@ async def deploy(p: Path, pem=None):
     if plan.get('https'):
         fpaths.append(Path(__file__) / "../../resources/nginx/nginx.conf")
         fpaths.append(Path(__file__) / "../../resources/nginx/nginx-443.conf")
-    ec2.copy(fpaths, inst.public_dns_name)
-    for el in ec2.commands(["docker-compose down", "docker-compose pull", "docker-compose up -d"],
-                           inst.public_dns_name):
+    manager.copy(fpaths, inst.public_dns_name)
+    for el in manager.commands(["docker-compose down", "docker-compose pull", "docker-compose up -d"],
+                               inst.public_dns_name):
         logger.info(el.strip())
     logger.info("Done!")
 
@@ -348,21 +393,27 @@ async def deploy(p: Path, pem=None):
 def info():
     dao = PlanDAO(Path(os.getcwd()))
     plan = dao.get()
-    instance_id = plan.get("instance")
-    logger.info(f"Instance id: {instance_id}")
     dao = FSLokoProjectDAO()
-    ec2 = EC2Manager()
+    cloud = plan.get('cloud')
+    instance_id = plan.get("instance")
     dns = None
+    manager = None
+    logger.info(f"Instance id: {instance_id}")
+    if cloud == 'aws':
+        manager = EC2Manager()
+    if cloud == 'azure':
+        manager = AzureManager()
     if instance_id:
         try:
-            ec2inst = ec2.get(instance_id)
+            inst = manager.get(instance_id)
         except Exception as e:
             logger.error(e)
             sys.exit(1)
-        logger.info(f"Instance {instance_id} status: {ec2inst.state['Name']}")
-        logger.info(f"Public DNS name: {ec2inst.public_dns_name}")
-        dns = ec2inst.public_dns_name
-        logger.info(f"Public IP Address: {ec2inst.public_ip_address}")
+        logger.info(f"Instance {instance_id} status: {inst.state['Name']}")
+        dns = inst.public_dns_name
+        if cloud == 'aws':
+            logger.info(f"Public DNS name: {inst.public_dns_name}")
+        logger.info(f"Public IP Address: {inst.public_ip_address}")
 
     project = dao.get(Path(os.getcwd()))
 
@@ -385,11 +436,16 @@ def destroy():
     if instance_id is None:
         logger.error("There is no instance to destroy")
         sys.exit(1)
-    ec2 = EC2Manager()
-    inst = ec2.get(instance_id)
+    cloud = plan.get('cloud')
+    if cloud == 'aws':
+        manager = EC2Manager()
+    if cloud == 'azure':
+        manager = AzureManager()
+    inst = manager.get(instance_id)
     logger.info(f"Terminating {instance_id}...")
     inst.terminate()
-    del plan["instance"]
+    del plan['cloud']
+    del plan['instance']
     dao.save(plan)
 
     logger.info("Done!")
