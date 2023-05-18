@@ -295,10 +295,11 @@ async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a
 
     dao = PlanDAO(p)
     plan = dao.get()
-    instance_id = plan.get("instance")
+    cloud = plan.get('cloud')
     logger.info("Creating ec2 instance")
-    if instance_id:
+    if cloud and cloud.get('type') == 'aws':
         try:
+            instance_id = cloud.get('instance')
             inst = ec2.get(instance_id)
             state = inst.state['Name']
             if state != "running":
@@ -307,14 +308,13 @@ async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a
         except Exception as e:
             logger.error(e)
             sys.exit(1)
-
-    if not instance_id:
+    else:
         ii = ec2.create(instance_name, ami, instance_type=instance_type, security_group=security_group,
                         device_volume_size=device_volume_size)
-        plan['cloud'] = 'aws'
-        plan['instance'] = ii.id
+        instance_id = ii.id
+        plan['cloud'] = dict(type='aws', region=region_name, instance=instance_id)
         dao.save(plan)
-    instance_id = plan['instance']
+
     logger.info("Waiting for instance running state...")
     ec2.wait_for(instance_id, "running")
 
@@ -323,17 +323,18 @@ async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a
     logger.info(f"Public DNS name: {inst.public_dns_name}")
     logger.info(f"Public IP Address: {inst.public_ip_address}")
 
-async def init_azure(p: Path, name, instance_type, img, resource_group, security_group,
-                     device_volume_size=30, pem=None):
+async def init_azure(p: Path, name, instance_type, img, resource_group, security_group, virtual_network,
+                     device_volume_size=30, pem=None, region_name=None):
 
-    azure = AzureManager(pem=pem)
+    azure = AzureManager(pem=pem, region_name=region_name)
 
     dao = PlanDAO(p)
     plan = dao.get()
-    instance_id = plan.get("instance")
+    cloud = plan.get('cloud')
     logger.info("Creating Azure VM")
-    if instance_id:
+    if cloud and cloud.get('type') == 'azure':
         try:
+            instance_id = cloud.get('instance')
             inst = azure.get(instance_id)
             state = inst.state['Name']
             if state != "running":
@@ -344,13 +345,11 @@ async def init_azure(p: Path, name, instance_type, img, resource_group, security
             sys.exit(1)
 
     else:
-        ii = azure.create(name, img=img, rg_name=resource_group, sg_name=security_group, instance_type=instance_type,
-                          device_volume_size=device_volume_size)
-
-        plan['cloud'] = 'azure'
-        plan['instance'] = ii.id
+        ii = azure.create(name, img=img, rg_name=resource_group, sg_name=security_group, vnet_name=virtual_network,
+                          instance_type=instance_type, device_volume_size=device_volume_size)
+        instance_id = ii.id
+        plan['cloud'] = dict(type='azure', instance=instance_id)
         dao.save(plan)
-    instance_id = plan['instance']
     # logger.info("Waiting for instance running state...")
     # ec2.wait_for(instance_id, "running")
 
@@ -362,17 +361,17 @@ async def deploy(p: Path, pem=None):
     dao = PlanDAO(p)
     plan = dao.get()
     cloud = plan.get('cloud')
-    instance_id = plan.get("instance")
     manager = None
-    if cloud == 'aws':
-        manager = EC2Manager(pem=pem)
+    if cloud and cloud.get('type') == 'aws':
+        manager = EC2Manager(pem=pem, region_name=cloud.get('region'))
     # img = "ami-06ce824c157700cd2"
     # ec2.create("accenture", img)
-    if cloud == 'azure':
+    if cloud and cloud.get('type') == 'azure':
         manager = AzureManager(pem=pem)
     if not manager:
         logger.error("No instance found")
         sys.exit(1)
+    instance_id = cloud.get("instance")
     inst = manager.get(instance_id)
     logger.info(f"Deploying to {instance_id}...")
 
@@ -395,15 +394,15 @@ def info():
     plan = dao.get()
     dao = FSLokoProjectDAO()
     cloud = plan.get('cloud')
-    instance_id = plan.get("instance")
     dns = None
     manager = None
-    logger.info(f"Instance id: {instance_id}")
-    if cloud == 'aws':
-        manager = EC2Manager()
-    if cloud == 'azure':
+    if cloud and cloud.get('type') == 'aws':
+        manager = EC2Manager(region_name=cloud.get('region'))
+    if cloud and cloud.get('type') == 'azure':
         manager = AzureManager()
-    if instance_id:
+    if manager:
+        instance_id = cloud.get("instance")
+        logger.info(f"Instance id: {instance_id}")
         try:
             inst = manager.get(instance_id)
         except Exception as e:
@@ -411,7 +410,7 @@ def info():
             sys.exit(1)
         logger.info(f"Instance {instance_id} status: {inst.state['Name']}")
         dns = inst.public_dns_name
-        if cloud == 'aws':
+        if cloud.get('type') == 'aws':
             logger.info(f"Public DNS name: {inst.public_dns_name}")
         logger.info(f"Public IP Address: {inst.public_ip_address}")
 
@@ -432,20 +431,20 @@ def info():
 def destroy():
     dao = PlanDAO(Path(os.getcwd()))
     plan = dao.get()
-    instance_id = plan.get("instance")
-    if instance_id is None:
+    cloud = plan.get('cloud')
+    manager = None
+    if cloud and cloud.get('type') == 'aws':
+        manager = EC2Manager(region_name=cloud.get('region'))
+    if cloud and cloud.get('type') == 'azure':
+        manager = AzureManager()
+    if manager is None:
         logger.error("There is no instance to destroy")
         sys.exit(1)
-    cloud = plan.get('cloud')
-    if cloud == 'aws':
-        manager = EC2Manager()
-    if cloud == 'azure':
-        manager = AzureManager()
+    instance_id = cloud.get("instance")
     inst = manager.get(instance_id)
     logger.info(f"Terminating {instance_id}...")
     inst.terminate()
     del plan['cloud']
-    del plan['instance']
     dao.save(plan)
 
     logger.info("Done!")

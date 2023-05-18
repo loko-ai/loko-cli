@@ -100,9 +100,9 @@ class AzureVM:
         self.compute_client.disks.begin_delete(disk_name=os_disk_name, resource_group_name=self.rg_name).wait()
 
 class AzureManager:
-    def __init__(self, region_name='westeurope', pem=None):
+    def __init__(self, region_name=None, pem=None):
 
-        self.region_name = region_name
+        self.region_name = region_name or 'westeurope'
         credential = AzureCliCredential()
         subscription_client = SubscriptionClient(credential)
         subscription_id = subscription_client.subscriptions.list().next().subscription_id
@@ -167,7 +167,7 @@ class AzureManager:
 
         subnet = self.network_client.subnets.get(subnet_name='default',
                                                  virtual_network_name=vnet_name,
-                                                 resource_group_name=sg_name)
+                                                 resource_group_name=rg_name)
         ip_add = self._create_ip_address(name=name, rg_name=rg_name)
         nic = self._create_network_interface(name=name, rg_name=rg_name, ip_add_name=name, sg_id=sg.id,
                                              subnet_id=subnet.id, ip_add_id=ip_add.id)

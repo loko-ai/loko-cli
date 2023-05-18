@@ -9,7 +9,7 @@ import loko_cli.apps.total as tt
 from loguru import logger
 
 
-@click.group(name="loko", help="version 0.0.4")
+@click.group(name="loko", help="version 0.0.5")
 @click.option('--verbose', default=False, show_default=True, help='Verbose output')
 def loko(verbose):
     if not verbose:
@@ -31,6 +31,7 @@ def plan(push, company, gateway_port, https):
 
 @loko.command()
 @click.option("--name", required=True, type=str, help="the name of the instance")
+@click.option("--region_name", default=None, type=str, help="the region name of the instance")
 @click.option("--security_group", default="default", help="the security group associated to the instance",
               show_default=True, type=str)
 @click.option("--instance_type", default="t2.micro", help="the instance type", show_default=True, type=str)
@@ -38,24 +39,30 @@ def plan(push, company, gateway_port, https):
 @click.option("--device_volume_size", default=30, help="the instance volume size in GigaBytes", show_default=True,
               type=int)
 @click.option("--pem", default=Path.home() / "loko.pem", help="the aws key path", show_default=True, type=str)
-def ec2(name, security_group, instance_type, ami, device_volume_size, pem):
+def ec2(name, region_name, security_group, instance_type, ami, device_volume_size, pem):
     """Manage ec2 instances"""
     p = Path(os.getcwd())
-    asyncio.run(tt.init_ec2(p, name, instance_type, ami, security_group, device_volume_size, pem))
+    asyncio.run(tt.init_ec2(p, name, instance_type, ami, security_group, device_volume_size, pem, region_name))
 
 @loko.command()
 @click.option("--name", required=True, type=str, help="the name of the VM")
+@click.option("--region_name", default='westeurope', type=str, help="the region name of the instance",
+              show_default=True)
 @click.option("--resource_group", default="loko", type=str, help="the name of the resource group", show_default=True)
 @click.option("--security_group", default="loko", help="the security group associated to the instance",
               show_default=True, type=str)
+@click.option("--virtual_network", default="loko", help="the virtual network associated to the instance",
+              show_default=True, type=str)
 @click.option("--instance_type", default="Standard_B1s", help="the instance type", show_default=True, type=str)
 @click.option("--img", default="loko", help="the vm image", show_default=True, type=str)
-@click.option("--device_volume_size", default=30, help="the instance volume size in GigaBytes", show_default=True, type=int)
+@click.option("--device_volume_size", default=30, help="the instance volume size in GigaBytes", show_default=True,
+              type=int)
 @click.option("--pem", default=Path.home() / "loko_azure.pem", help="the aws key path", show_default=True, type=str)
-def azure(name, resource_group, security_group, instance_type, img, device_volume_size, pem):
+def azure(name, region_name, resource_group, security_group, virtual_network, instance_type, img, device_volume_size, pem):
     """Manage Azure VMs"""
     p = Path(os.getcwd())
-    asyncio.run(tt.init_azure(p, name, instance_type, img, resource_group, security_group, device_volume_size, pem))
+    asyncio.run(tt.init_azure(p, name, instance_type, img, resource_group, security_group, virtual_network,
+                              device_volume_size, pem, region_name))
 
 
 @loko.command()
