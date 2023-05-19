@@ -38,7 +38,7 @@ def plan(push, company, gateway_port, https):
 @click.option("--ami", default="ami-0a691527202ea8b3d", help="the instance ami", show_default=True, type=str)
 @click.option("--device_volume_size", default=30, help="the instance volume size in GigaBytes", show_default=True,
               type=int)
-@click.option("--pem", default=Path.home() / "loko.pem", help="the aws key path", show_default=True, type=str)
+@click.option("--pem", default=Path.home() / "loko.pem", help="the SSH Key path", show_default=True, type=str)
 def ec2(name, region_name, security_group, instance_type, ami, device_volume_size, pem):
     """Manage ec2 instances"""
     p = Path(os.getcwd())
@@ -57,7 +57,7 @@ def ec2(name, region_name, security_group, instance_type, ami, device_volume_siz
 @click.option("--img", default="loko", help="the vm image", show_default=True, type=str)
 @click.option("--device_volume_size", default=30, help="the instance volume size in GigaBytes", show_default=True,
               type=int)
-@click.option("--pem", default=Path.home() / "loko_azure.pem", help="the aws key path", show_default=True, type=str)
+@click.option("--pem", default=Path.home() / "loko_azure.pem", help="the SSH Key path", show_default=True, type=str)
 def azure(name, region_name, resource_group, security_group, virtual_network, instance_type, img, device_volume_size, pem):
     """Manage Azure VMs"""
     p = Path(os.getcwd())
@@ -66,7 +66,7 @@ def azure(name, region_name, resource_group, security_group, virtual_network, in
 
 
 @loko.command()
-@click.option("--pem", default=Path.home() / "loko.pem", help="the aws key path", show_default=True, type=str)
+@click.option("--pem", default=Path.home() / "loko.pem", help="the SSH Key path", show_default=True, type=str)
 def deploy(pem):
     """Deploy the project"""
     p = Path(os.getcwd())
