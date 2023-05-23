@@ -1,3 +1,5 @@
 include README.md
 include requirements.txt
 include *.json
+include loko_cli/resources/nginx/nginx.conf
+include loko_cli/resources/nginx/nginx-443.conf

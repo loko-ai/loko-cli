@@ -28,6 +28,7 @@ setuptools.setup(
     entry_points={
         'console_scripts': ['loko=loko_cli.apps.cl:loko'],
     },
-    install_requires=get_requirements()
+    install_requires=get_requirements(),
+    include_package_data=True
 
 )
