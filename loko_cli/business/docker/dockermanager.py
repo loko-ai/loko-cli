@@ -143,7 +143,8 @@ class LokoDockerClient:
             if log_collector and final_name:
                 await log_collector(dict(type="log", name=final_name, msg=json.dumps(line)))
 
-    async def build(self, path, image=None, dockerfile: StringIO = None, log_collector: LogCollector = None):
+    async def build(self, path, image=None, dockerfile: StringIO = None, no_cache=False,
+                    log_collector: LogCollector = None):
         client = self.client
         # client.session = aiohttp.ClientSession(connector=client.connector, timeout=200 * 1000)
 
@@ -169,7 +170,7 @@ class LokoDockerClient:
         async for line in client.images.build(fileobj=context,
                                               encoding="gzip",
                                               tag=f"{image or path.name}",
-                                              buildargs=dict(GATEWAY=GATEWAY), stream=True):
+                                              buildargs=dict(GATEWAY=GATEWAY), stream=True, nocache=no_cache):
             if "stream" in line:
                 msg = line['stream'].strip()
             logger.debug(msg)

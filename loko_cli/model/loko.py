@@ -132,8 +132,10 @@ class Project:
     def get_required_resources(self):
         for k, g in self.graphs.items():
             for node in g.nodes:
-                if "Inputs" == node.data['options'].get("group"):
-                    yield node.data['options'].get("values").get("value").get("path")
+                if "Inputs" == node.data.get('options', {}).get("group"):
+                    temp = node.data['options'].get("values", {}).get("value", {}).get("path")
+                    if temp is not None:
+                        yield temp
 
     def get_global_components(self):
         for k, g in self.graphs.items():

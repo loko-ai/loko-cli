@@ -70,7 +70,7 @@ async def aprint(arg):
     logger.debug(arg['msg'])
 
 
-async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False):
+async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False, overwrite=True, no_cache=False):
     dao = FSLokoProjectDAO()
     project = dao.get(p)
     plan_dao = PlanDAO(p)
@@ -86,7 +86,7 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False)
         # Build a local extension
         MAIN_IMAGE = f"{company}/{project.path.name}"
         logger.info(f"Building {MAIN_IMAGE}")
-        resp = await client.build(project.path, image=MAIN_IMAGE, log_collector=aprint)
+        resp = await client.build(project.path, image=MAIN_IMAGE, log_collector=aprint, no_cache=no_cache)
         if resp:
             logger.info("Build successful")
 
@@ -96,6 +96,7 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False)
         RULES.append(dict(name=name, host=name, port=8080, type="custom", scan=False))
 
     services = {}
+    environments = {}
     project_config_path = p / "config.json"
     project_config = {}
     if project_config_path.exists():
@@ -121,9 +122,12 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False)
                     if config_path.exists():
                         with config_path.open() as cf:
                             config = json.load(cf)
+                            ge_env = config.get("main", {}).get("environment", {})
+                            environments[_ge] = ge_env
                             sides = config.get("side_containers", {})
                             for k, v in sides.items():
-                                services[f"{root.name}_{k}"] = dict(image=v['image'])
+                                services[f"{root.name}_{k}"] = dict(image=v['image'],
+                                                                    environment=v.get("environment", {}))
                             includes = project_config.get("includes", {}).get(_ge, [])
                             with set_directory(base / "shared" / "extensions" / _ge), TemporaryDirectory(
                                     dir=".") as dd:
@@ -133,7 +137,8 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False)
                                     target = incl.get("target")
                                     source = Path(source)
                                     target = Path(target)
-                                    tt = dd / "includes"
+                                    tt = dd / "includes" / source.name
+                                    print(source, tt, f"COPY {tt.as_posix()} {target.as_posix()}")
                                     shutil.copytree(source, tt)
                                     docker_cmds.append(f"COPY {tt.as_posix()} {target.as_posix()}")
 
@@ -163,7 +168,7 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False)
             logger.info(f"Resources: {resources}")
             ORCH_IMAGE = f"{company}/{name}_orchestrator"
             os.chdir(project.path)
-            orchestrator_commands = ["FROM lokoai/loko-orchestrator:1.0.0-dev",
+            orchestrator_commands = ["FROM lokoai/loko-orchestrator:1.0.1-dev",
                                      f"RUN mkdir -p /root/loko/projects/{name}", f"COPY . /root/loko/projects/{name}/",
                                      "CMD python services.py"]
 
@@ -172,7 +177,11 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False)
                 dest = d / r
                 if not dest.parent.exists():
                     dest.parent.mkdir(exist_ok=True, parents=True)
-                shutil.copyfile(base / r, d / r)
+                print(r, r.is_dir(), (base / r), (base / r).is_dir())
+                if (base / r).is_dir():
+                    shutil.copytree(base / r, d / r)
+                else:
+                    shutil.copyfile(base / r, d / r)
                 logger.info(f"Copying {base / r} to {d / r}")
                 ss = (d / r)
                 tt = Path('/root/loko') / r
@@ -215,76 +224,80 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False)
                 logger.info(f"Pushed")
 
             # Generate docker-compose
+            if overwrite:
+                for ge in ges:
+                    services[ge] = dict(image=f"{company}/{ge}", environment=dict(GATEWAY="http://gateway:8080",
+                                                                                  EXTERNAL_GATEWAY=f"http://localhost:{gateway_port}") |
+                                                                             environments[ge])
+                    RULES.append(dict(name=ge, host=ge, port=8080, type="custom", scan=False))
 
-            for ge in ges:
-                services[ge] = dict(image=f"{company}/{ge}")
-                RULES.append(dict(name=ge, host=ge, port=8080, type="custom", scan=False))
+                services['orchestrator'] = dict(image=ORCH_IMAGE,
+                                                volumes=["/var/run/docker.sock:/var/run/docker.sock"],
+                                                command="python services.py",
+                                                environment=dict(GATEWAY="http://gateway:8080",
+                                                                 EXTERNAL_GATEWAY=f"http://localhost:{gateway_port}"))
 
-            services['orchestrator'] = dict(image=ORCH_IMAGE,
-                                            volumes=["/var/run/docker.sock:/var/run/docker.sock"],
-                                            command="python services.py",
-                                            environment=dict(GATEWAY="http://gateway:8080",
-                                                             EXTERNAL_GATEWAY=f"http://localhost:{gateway_port}", ))
+                if has_local:
+                    services[name] = dict(image=MAIN_IMAGE,
+                                          environment=dict(GATEWAY="http://gateway:8080",
+                                                           EXTERNAL_GATEWAY=f"http://localhost:{gateway_port}"))
 
-            if has_local:
-                services[name] = dict(image=MAIN_IMAGE)
+                dc = dict(version="3.3", services=services)
 
-            dc = dict(version="3.3", services=services)
+                """for core in set(project.get_core_components()):
+                    includes = project_config.get("includes", {}).get(core, [])
+                    if includes:
+                        core_docker_cmds = [f"FROM {core_images[core]['image']}"]
+                        for incl in includes:
+                            source = Path(incl.get("source"))
+                            target = incl.get("target")
+                            tsource = d / "predictors" / source.name
+                            shutil.copytree(source, tsource)
+                            core_docker_cmds.append(f"COPY {tsource} {target}")
+                            CORE_IMAGE = f"{company}/{p.name}_{core}"
+    
+                            logger.info(f"Building {core}: {CORE_IMAGE}")
+                            finaldf = StringIO()
+                            finaldf.write("\n".join(core_docker_cmds))
+                            finaldf.seek(0)
+                            print("\n".join(core_docker_cmds))
+    
+                            resp = await client.build(project.path, dockerfile=finaldf, image=CORE_IMAGE,
+                                                      log_collector=aprint)
+                            if resp:
+                                logger.info("Build successful")
+                            core_images[core]['image'] = CORE_IMAGE
+    
+                    services[core] = core_images[core]
+    
+                    RULES.append(dict(name=core, host=core, port=8080, type=core, scan=False))"""
 
-            """for core in set(project.get_core_components()):
-                includes = project_config.get("includes", {}).get(core, [])
-                if includes:
-                    core_docker_cmds = [f"FROM {core_images[core]['image']}"]
-                    for incl in includes:
-                        source = Path(incl.get("source"))
-                        target = incl.get("target")
-                        tsource = d / "predictors" / source.name
-                        shutil.copytree(source, tsource)
-                        core_docker_cmds.append(f"COPY {tsource} {target}")
-                        CORE_IMAGE = f"{company}/{p.name}_{core}"
+                services['gateway'] = dict(image="lokoai/loko-gateway:0.0.4-dev", ports=[f"{gateway_port}:8080"],
+                                           environment=dict(RULES=str(RULES)))
 
-                        logger.info(f"Building {core}: {CORE_IMAGE}")
-                        finaldf = StringIO()
-                        finaldf.write("\n".join(core_docker_cmds))
-                        finaldf.seek(0)
-                        print("\n".join(core_docker_cmds))
+                if https:
+                    vv = ['./nginx.conf:/etc/nginx/nginx.conf:ro',
+                          './certbot/www:/var/www/certbot/:ro',
+                          './certbot/conf/:/etc/nginx/ssl/:ro']
+                    vv = CommentedSeq(vv)
+                    vv.yaml_set_comment_before_after_key(1, "- ./nginx-443.conf:/etc/nginx/nginx.conf:ro", 6)
 
-                        resp = await client.build(project.path, dockerfile=finaldf, image=CORE_IMAGE,
-                                                  log_collector=aprint)
-                        if resp:
-                            logger.info("Build successful")
-                        core_images[core]['image'] = CORE_IMAGE
+                    nginx = dict(image='nginx:latest',
+                                 volumes=vv,
+                                 environment=dict(TZ='Europe/Rome'),
+                                 ports=['80:80', '443:443'])
+                    nginx = CommentedMap(**nginx)
+                    c = nginx.ca.items.setdefault('volumes', [None, [], None, None])
+                    c[3] = [CommentToken('######## if you want use HTTPS, edit this volume mounting nginx-443.conf\n',
+                                         CommentMark(6))]
+                    services['nginx'] = nginx
 
-                services[core] = core_images[core]
+                logger.info("Creating docker-compose")
 
-                RULES.append(dict(name=core, host=core, port=8080, type=core, scan=False))"""
-
-            services['gateway'] = dict(image="lokoai/loko-gateway:0.0.4-dev", ports=[f"{gateway_port}:8080"],
-                                       environment=dict(RULES=str(RULES)))
-
-            if https:
-                vv = ['./nginx.conf:/etc/nginx/nginx.conf:ro',
-                      './certbot/www:/var/www/certbot/:ro',
-                      './certbot/conf/:/etc/nginx/ssl/:ro']
-                vv = CommentedSeq(vv)
-                vv.yaml_set_comment_before_after_key(1, "- ./nginx-443.conf:/etc/nginx/nginx.conf:ro", 6)
-
-                nginx = dict(image='nginx:latest',
-                             volumes=vv,
-                             environment=dict(TZ='Europe/Rome'),
-                             ports=['80:80', '443:443'])
-                nginx = CommentedMap(**nginx)
-                c = nginx.ca.items.setdefault('volumes', [None, [], None, None])
-                c[3] = [CommentToken('######## if you want use HTTPS, edit this volume mounting nginx-443.conf\n',
-                                     CommentMark(6))]
-                services['nginx'] = nginx
-
-            logger.info("Creating docker-compose")
-
-            with open("docker-compose.yml", "w") as o:
-                YAML.dump(dc, o)
-            plan_dao.save(pplan)
-            logger.info("Done!")
+                with open("docker-compose.yml", "w") as o:
+                    YAML.dump(dc, o)
+                plan_dao.save(pplan)
+                logger.info("Done!")
 
     await client.close()
 
@@ -323,9 +336,9 @@ async def init_ec2(p: Path, instance_name, instance_type="t2.micro", ami="ami-0a
     logger.info(f"Public DNS name: {inst.public_dns_name}")
     logger.info(f"Public IP Address: {inst.public_ip_address}")
 
+
 async def init_azure(p: Path, name, instance_type, img, resource_group, security_group, virtual_network,
                      device_volume_size=30, pem=None, region_name=None):
-
     azure = AzureManager(pem=pem, region_name=region_name)
 
     dao = PlanDAO(p)
@@ -356,6 +369,7 @@ async def init_azure(p: Path, name, instance_type, img, resource_group, security
     logger.info(f"VM {instance_id} is running")
     inst = azure.get(instance_id)
     logger.info(f"Public IP Address: {inst.public_ip_address}")
+
 
 async def deploy(p: Path, pem=None):
     dao = PlanDAO(p)

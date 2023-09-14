@@ -23,10 +23,14 @@ def loko(verbose):
 @click.option('--company', required=True, type=str, help='Company name or private registry')
 @click.option('--gateway_port', default=8080, type=int, help='the gateway public port', show_default=True)
 @click.option('--https', default=True, type=bool, help='Expose services through https', show_default=True)
-def plan(push, company, gateway_port, https):
+@click.option('--overwrite', default=True, type=bool, help='Overwrite deployment files', show_default=True)
+@click.option("--no-cache", default=False, type=bool, help='Build docker images not using docker cache',
+              show_default=True)
+def plan(push, company, gateway_port, https, overwrite, no_cache):
     """Prepare the plan for the deployment of the Loko project"""
     logger.info("Planning")
-    asyncio.run(tt.plan(Path(os.getcwd()), push=push, company=company, gateway_port=gateway_port, https=https))
+    asyncio.run(tt.plan(Path(os.getcwd()), push=push, company=company, gateway_port=gateway_port, https=https,
+                        overwrite=overwrite, no_cache=no_cache))
 
 
 @loko.command()
@@ -44,6 +48,7 @@ def ec2(name, region_name, security_group, instance_type, ami, device_volume_siz
     p = Path(os.getcwd())
     asyncio.run(tt.init_ec2(p, name, instance_type, ami, security_group, device_volume_size, pem, region_name))
 
+
 @loko.command()
 @click.option("--name", required=True, type=str, help="the name of the VM")
 @click.option("--region_name", default='westeurope', type=str, help="the region name of the instance",
@@ -58,7 +63,8 @@ def ec2(name, region_name, security_group, instance_type, ami, device_volume_siz
 @click.option("--device_volume_size", default=30, help="the instance volume size in GigaBytes", show_default=True,
               type=int)
 @click.option("--pem", default=Path.home() / "loko_azure.pem", help="the SSH Key path", show_default=True, type=str)
-def azure(name, region_name, resource_group, security_group, virtual_network, instance_type, img, device_volume_size, pem):
+def azure(name, region_name, resource_group, security_group, virtual_network, instance_type, img, device_volume_size,
+          pem):
     """Manage Azure VMs"""
     p = Path(os.getcwd())
     asyncio.run(tt.init_azure(p, name, instance_type, img, resource_group, security_group, virtual_network,
@@ -90,5 +96,5 @@ if __name__ == '__main__':
     try:
         loko()
     except Exception as inst:
-        logger.error(inst)
+        logger.exception(inst)
         sys.exit(1)
