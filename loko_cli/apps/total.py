@@ -138,9 +138,9 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False,
                                     source = Path(source)
                                     target = Path(target)
                                     tt = dd / "includes" / source.name
-                                    print(source, tt, f"COPY {tt.as_posix()} {target.as_posix()}")
+                                    print(source, tt, f'COPY ["{tt.as_posix()}", "{target.as_posix()}"]')
                                     shutil.copytree(source, tt)
-                                    docker_cmds.append(f"COPY {tt.as_posix()} {target.as_posix()}")
+                                    docker_cmds.append(f'COPY ["{tt.as_posix()}", "{target.as_posix()}"]')
 
                                 finaldf = StringIO()
                                 finaldf.write("\n".join(docker_cmds))
@@ -148,7 +148,8 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False,
 
                                 GE_IMAGE_NAME = f"{company}/{root.name}"
                                 logger.info(f"Building global extension: {GE_IMAGE_NAME}")
-                                resp = await client.build(root, dockerfile=finaldf, image=GE_IMAGE_NAME)
+                                resp = await client.build(root, dockerfile=finaldf, image=GE_IMAGE_NAME,
+                                                          no_cache=no_cache)
                                 if resp:
                                     logger.info("Build successful")
                                 if push:
@@ -185,17 +186,19 @@ async def plan(p: Path, company: str, gateway_port=8080, push=True, https=False,
                 logger.info(f"Copying {base / r} to {d / r}")
                 ss = (d / r)
                 tt = Path('/root/loko') / r
-                orchestrator_commands.append(f"COPY {ss.as_posix()} {tt.as_posix()}")
+                orchestrator_commands.append(f'COPY ["{ss.as_posix()}", "{tt.as_posix()}"]')
 
             df = StringIO()
             if ges:
-                orchestrator_commands.append(f"COPY {d}/shared/ /root/loko/shared/")
+                orchestrator_commands.append(f'COPY ["{d}/shared", "/root/loko/shared/"]')
+
 
             df.write("\n".join(orchestrator_commands))
             df.seek(0)
 
             logger.info(f"Building orchestrator: {ORCH_IMAGE}")
-            resp = await client.build(project.path, dockerfile=df, image=ORCH_IMAGE, log_collector=aprint)
+            resp = await client.build(project.path, dockerfile=df, image=ORCH_IMAGE, log_collector=aprint,
+                                      no_cache=no_cache)
             if resp:
                 logger.info("Build successful")
 

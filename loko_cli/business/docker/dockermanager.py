@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import sys
 from io import StringIO
 from pathlib import Path
 
@@ -173,7 +174,11 @@ class LokoDockerClient:
                                               buildargs=dict(GATEWAY=GATEWAY), stream=True, nocache=no_cache):
             if "stream" in line:
                 msg = line['stream'].strip()
-            logger.debug(msg)
+                logger.debug(msg)
+            if "error" in line:
+                msg = line['error'].strip()
+                logger.error(msg)
+                sys.exit(1)
 
             if msg:
                 last_msg = msg

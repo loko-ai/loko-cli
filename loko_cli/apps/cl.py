@@ -9,14 +9,13 @@ import loko_cli.apps.total as tt
 from loguru import logger
 
 
-@click.group(name="loko", help="version 0.0.5")
-@click.option('--verbose', default=False, show_default=True, help='Verbose output')
+@click.group(name="loko", help="version 0.0.6")
+@click.option('--verbose', is_flag=True, show_default=True, help='Verbose output')
 def loko(verbose):
     if not verbose:
         logger.remove()
         logger.add(sys.stderr, level='INFO')
     pass
-
 
 @loko.command()
 @click.option('--push', default=True, help='Push on registry', show_default=True)
@@ -24,7 +23,7 @@ def loko(verbose):
 @click.option('--gateway_port', default=8080, type=int, help='the gateway public port', show_default=True)
 @click.option('--https', default=True, type=bool, help='Expose services through https', show_default=True)
 @click.option('--overwrite', default=True, type=bool, help='Overwrite deployment files', show_default=True)
-@click.option("--no-cache", default=False, type=bool, help='Build docker images not using docker cache',
+@click.option("--no-cache", is_flag=True, help='Build docker images not using docker cache',
               show_default=True)
 def plan(push, company, gateway_port, https, overwrite, no_cache):
     """Prepare the plan for the deployment of the Loko project"""
